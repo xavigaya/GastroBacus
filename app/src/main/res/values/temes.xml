@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="most">#5E1A3A</color>
+    <color name="pedra">#EEF0E8</color>
+    <style name="Tema.GastroBacus" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/pedra</item>
+        <item name="android:statusBarColor">@color/most</item>
+        <item name="android:navigationBarColor">@color/pedra</item>
+    </style>
+</resources>

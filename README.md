@@ -1,56 +1,68 @@
 # GastroBacus
 
-App per portar el consum de la societat gastronòmica. En lloc de deixar monedes, el soci apunta el que pren. A final de mes, cada soci rep un informe i se li carrega l'import al compte.
+App Android per portar el consum de la societat gastronòmica. En lloc de deixar monedes, el soci apunta el que pren a la tauleta de la societat. A final de mes, cada soci rep l'informe per correu i se li carrega l'import al compte.
 
-És una webapp instal·lable (PWA): funciona a la tauleta de la societat i al mòbil de cada soci, tant Android com iPhone, sense passar per cap botiga d'aplicacions.
+L'app és **autoallotjada**: viu només a la tauleta, amb les dades en una base de dades local, sense cap servidor. L'únic servei extern és el compte de Google de la tauleta, que s'utilitza per enviar els correus (Gmail) i per fer una còpia de seguretat diària (Drive).
 
 ## Què fa
 
-- **Tauleta de la societat**: el soci tria el seu nom, posa el PIN de 4 xifres i toca el que pren. Es pot apuntar per a convidats, que van al compte del soci (amb preu de convidat si el producte en té). Durant 10 minuts es pot desfer. Si ningú toca la tauleta, la sessió es tanca sola.
-- **Mòbil**: cada soci entra amb el seu correu i contrasenya, apunta el que pren i consulta el consum del mes.
-- **Reserves** de la cuina o de les taules, amb calendari i control de solapaments.
-- **Àpats compartits**: qui ve, quants convidats porta i què ha costat la compra. Es pot repartir a parts iguals o segons el que ha pres cadascú (parts). Qui ha avançat diners se'ls descompta.
-- **Gestió (junta)**: productes i preus, socis, estoc amb avís de reposició, correcció de consumicions, resum del mes.
-- **Tancament de mes**, en tres passos:
-  1. Revisar (Excel i PDF per a la junta).
-  2. Enviar l'informe a cada soci i el resum al tresorer. S'obre un termini de reclamacions.
-  3. Tancar el mes i generar el fitxer per al banc. De moment és un CSV; el format SEPA definitiu està pendent de saber què demana el banc.
+**Soci (a la tauleta)**
+- Tria el seu nom i escriu el PIN de 4 xifres.
+- Apunta el que pren, també per a convidats (al seu compte, amb preu de convidat si el producte en té).
+- Pot desfer una consumició durant 10 minuts.
+- Consulta el seu consum del mes, amb el detall.
+- Fa i anul·la reserves de la cuina o de les taules.
+- Crea i edita àpats compartits.
+- Canvia el seu PIN.
+- Si ningú toca la tauleta durant 3 minuts, la sessió es tanca sola.
 
-## Estat actual
+**Junta**
+- Resum del mes, productes més demanats i avisos.
+- Productes i preus, socis, estoc amb avís de reposició.
+- Correcció de consumicions i apuntar-ne a un soci.
+- Tancament de mes en tres passos:
+  1. Revisar (Excel i PDF per correu).
+  2. Enviar l'informe a cada soci (amb el PDF adjunt) i el resum a tresoreria. S'obre un termini de reclamacions.
+  3. Tancar el mes i generar el fitxer per al banc (de moment un CSV; el format SEPA definitiu està pendent).
+- Correus pendents i enviats, còpies de seguretat (fer-ne, veure-les i recuperar-ne), configuració.
 
-Primera versió amb **dades fictícies**, desades al navegador de cada aparell. Encara no es comparteixen entre la tauleta i els mòbils: això arribarà a la fase 2 amb Supabase (pla gratuït), amb l'esquema ja preparat a `supabase/schema.sql`.
+**Àpats compartits**: a parts iguals (els convidats compten com una persona més) o segons el que ha pres cadascú (parts). Les despeses que algú ha avançat se li descompten.
 
-Dades de prova:
+**Tauleta**: fixació de pantalla d'Android, s'obre sola en engegar i es pot fer servir com a pantalla d'inici.
 
-- PIN de tots els socis: `1234`
-- Mòbil: `jordi.puig@exemple.cat` (junta) o `anna.bosch@exemple.cat` (soci), contrasenya `gastro`
-- Els correus, en mode de proves, van tots a `xavigaya+gastrobacus@gmail.com`
+## Instal·lació
+
+Vegeu [docs/guia-installacio.md](docs/guia-installacio.md): configuració de Google Cloud, instal·lació de l'APK i ajustos de la tauleta.
 
 ## Desenvolupament
 
+Kotlin, Jetpack Compose, Room, WorkManager i l'API d'autorització de Google Play Services. Android 10 (API 29) o superior.
+
 ```bash
-npm install
-npm run dev        # servidor de desenvolupament
-npm run build      # genera dist/ per publicar
+./gradlew :app:testDebugUnitTest   # proves de lògica i captures de pantalla (a captures/)
+./gradlew :app:assembleDebug       # APK de proves
+./gradlew :app:assembleRelease     # APK signat (necessita keystore.properties i gastrobacus.jks)
 ```
 
-L'enviament de correus des del Gmail de la societat s'explica a `docs/correu-gmail.md`.
-
-## Estructura
+`keystore.properties` i `gastrobacus.jks` no es pugen al repositori.
 
 ```
-src/
-  data/        model, dades de prova, magatzem, informes i exportacions
-  components/  pantalles dels socis (apuntar, consum, reserves, àpats)
-  gestio/      pantalles de la junta
-backend/       script de Google per enviar correus des del Gmail
-supabase/      esquema de base de dades per a la fase 2
-docs/          documentació
+app/src/main/java/cat/gastrobacus/consum/
+  dades/      model, base de dades, repositori, informes i àpats, dades de prova
+  google/     Gmail i Drive
+  exportar/   PDF, Excel i fitxer per al banc
+  ui/         pantalles del soci
+  ui/gestio/  pantalles de la junta
+  Serveis.kt  correus, còpies i la còpia diària de les 4
+  Quiosc.kt   fixació de pantalla i arrencada automàtica
 ```
+
+## Dades de prova
+
+En instal·lar-la, l'app ofereix carregar dades fictícies: 24 socis, 30 productes i dos mesos de consumicions. El PIN de tots els socis és `1234`. Jordi, Montse i Pere són de la junta. En mode de proves, tots els correus van a `xavigaya+gastrobacus@gmail.com`.
 
 ## Pendent
 
-- Fase 2: dades compartides al núvol (Supabase) i comptes reals.
-- Format de la remesa bancària (SEPA) quan se sàpiga quin banc i quin format.
-- Valorar targetes o clauers NFC/QR per identificar-se a la tauleta.
+- Format de la remesa bancària (SEPA) quan se sàpiga el banc.
+- Valorar targetes o clauers NFC per identificar-se.
 - Carregar els socis i productes reals.
