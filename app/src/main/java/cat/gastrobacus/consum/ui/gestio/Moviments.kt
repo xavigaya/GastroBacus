@@ -195,6 +195,8 @@ fun Tancament(model: AppModel, estat: Estat) {
             Pas(1, "Revisar", fet = estatMes != EstatMes.OBERT, actual = estatMes == EstatMes.OBERT, Modifier.weight(1f)) {
                 Text("${informes.size} socis amb consum, total ${euros(total)}.", style = MaterialTheme.typography.bodyLarge)
                 if (mes == mesActual() && estatMes == EstatMes.OBERT) Avis("El mes encara no s'ha acabat.")
+                val bizumsPend = estat.bizumsPendents.filter { mesDe(it.ts) == mes }
+                if (bizumsPend.isNotEmpty()) Avis("Hi ha ${bizumsPend.size} Bizums d'aquest mes pendents de confirmar (${euros(bizumsPend.sumOf { it.import })}). No surten a l'informe; si no arriben, confirma-ho a Bizums i passaran a la factura.")
                 if (oberts.isNotEmpty()) Avis("Hi ha ${if (oberts.size == 1) "un àpat obert" else "${oberts.size} àpats oberts"} (${oberts.joinToString { it.titol }}). No sortiran a l'informe fins que no es passin als comptes.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Boto("Excel", { enviantFitxer = excelJunta(estat, mes) }, tipus = Tipus.FANTASMA, petit = true, enabled = informes.isNotEmpty(), icona = Icons.Default.Email)

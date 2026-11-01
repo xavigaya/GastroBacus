@@ -1,5 +1,6 @@
 package cat.gastrobacus.consum.dades
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -8,6 +9,10 @@ import kotlinx.serialization.Serializable
 /* Tots els imports són en cèntims d'euro (Long) per evitar errors d'arrodoniment. */
 
 enum class Rol { SOCI, JUNTA }
+
+/** Un període com a soci: data d'alta i, si n'hi ha, de baixa (AAAA-MM-DD). */
+@Serializable
+data class Periode(val alta: String, val baixa: String? = null)
 
 @Serializable
 @Entity(tableName = "socis")
@@ -21,10 +26,13 @@ data class Soci(
     val pinSal: String,
     val refBanc: String = "",
     val actiu: Boolean = true,
+    @ColumnInfo(defaultValue = "[]") val periodes: List<Periode> = emptyList(),
 ) {
     val nomComplet get() = "$nom $cognoms".trim()
     val inicials get() = (nom.take(1) + cognoms.take(1)).uppercase()
     val esJunta get() = rol == Rol.JUNTA
+    val dataAlta get() = periodes.firstOrNull()?.alta
+    val dataBaixa get() = if (actiu) null else periodes.lastOrNull()?.baixa
 }
 
 enum class Categoria(val nom: String) {
@@ -43,12 +51,22 @@ data class Producte(
     val estocMinim: Int = 0,
     val controlaEstoc: Boolean = true,
     val actiu: Boolean = true,
+    /** La junta el fixa com a favorit per a tothom. */
+    @ColumnInfo(defaultValue = "0") val favorit: Boolean = false,
+    /** Unitats consumides des de la darrera comanda (es posa a zero en rebre'n una). */
+    @ColumnInfo(defaultValue = "0") val comptador: Int = 0,
+    /** Avisa quan el comptador arriba a aquesta quantitat (0 = sense avís). */
+    @ColumnInfo(defaultValue = "0") val avisConsum: Int = 0,
+    val darreraComandaTs: Long? = null,
+    @ColumnInfo(defaultValue = "0") val avisMinimFet: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val avisConsumFet: Boolean = false,
 ) {
     fun preuPer(convidat: Boolean) = if (convidat && preuConvidat != null) preuConvidat else preu
     val calReposar get() = actiu && controlaEstoc && estoc <= estocMinim
 }
 
 enum class Origen { TAULETA, JUNTA }
+enum class Pagament { FACTURA, BIZUM }
 
 @Serializable
 @Entity(tableName = "consums", indices = [Index("sociId"), Index("ts")])
@@ -64,29 +82,50 @@ data class Consum(
     val origen: Origen = Origen.TAULETA,
     val anulatTs: Long? = null,
     val anulatPer: String? = null,
+    /** BIZUM: s'ha pagat al moment i no va a la factura mensual (si el Bizum es confirma). */
+    @ColumnInfo(defaultValue = "FACTURA") val pagament: Pagament = Pagament.FACTURA,
+    val bizumId: String? = null,
 ) {
     val import get() = quantitat * preuUnitari
     val anulat get() = anulatTs != null
 }
+
+enum class TipusReposicio { ENTRADA, RECOMPTE }
 
 @Serializable
 @Entity(tableName = "reposicions")
 data class Reposicio(
     @PrimaryKey val id: String,
     val producteId: String,
-    val quantitat: Int,
+    val quantitat: Int, // ENTRADA: unitats que entren; RECOMPTE: estoc comptat
     val ts: Long,
     val perId: String,
+    @ColumnInfo(defaultValue = "ENTRADA") val tipus: TipusReposicio = TipusReposicio.ENTRADA,
+    @ColumnInfo(defaultValue = "0") val estocAnterior: Int = 0,
+    /** Unitats consumides des de la comanda anterior (el comptador abans del reset). */
+    @ColumnInfo(defaultValue = "0") val consumitPeriode: Int = 0,
 )
 
 @Serializable
 data class Assistent(val sociId: String, val convidats: Int = 0, val parts: Double = 1.0)
+
+/** Persona de fora en una activitat oberta. Paga a part (Bizum o efectiu). */
+@Serializable
+data class Extern(val id: String, val nom: String, val parts: Double = 1.0, val pagat: Boolean = false)
 
 @Serializable
 data class DespesaApat(val id: String, val pagadorId: String, val concepte: String, val import: Long)
 
 enum class ModeRepartiment { IGUALS, PROPORCIONAL }
 enum class EstatApat { OBERT, TANCAT }
+
+enum class TipusActivitat(val nom: String, val descripcio: String) {
+    PRIVAT("Privat", "Un soci organitza per a ell i els seus convidats"),
+    SOCIS("Socis", "S'hi pot apuntar qualsevol soci"),
+    OBERT("Obert", "Socis i també persones de fora"),
+}
+
+const val TOT_EL_LOCAL = "Tot el local"
 
 @Serializable
 @Entity(tableName = "apats")
@@ -99,6 +138,14 @@ data class Apat(
     val assistents: List<Assistent> = emptyList(),
     val despeses: List<DespesaApat> = emptyList(),
     val estat: EstatApat = EstatApat.OBERT,
+    @ColumnInfo(defaultValue = "PRIVAT") val tipus: TipusActivitat = TipusActivitat.PRIVAT,
+    @ColumnInfo(defaultValue = "SOPAR") val franja: Franja = Franja.SOPAR,
+    /** TOT_EL_LOCAL (bloqueja el dia) o el nom d'un espai que es comparteix. */
+    @ColumnInfo(defaultValue = "Tot el local") val espai: String = TOT_EL_LOCAL,
+    @ColumnInfo(defaultValue = "[]") val externs: List<Extern> = emptyList(),
+    /** Preus de la cadira en el moment de crear l'activitat (la junta els pot canviar). */
+    @ColumnInfo(defaultValue = "0") val cadiraSoci: Long = 0,
+    @ColumnInfo(defaultValue = "0") val cadiraNoSoci: Long = 0,
 )
 
 enum class Franja(val nom: String) { DINAR("Dinar"), SOPAR("Sopar"), TOT_EL_DIA("Tot el dia") }
@@ -114,6 +161,9 @@ data class Reserva(
     val persones: Int,
     val notes: String = "",
     val creada: Long,
+    /** Reservat tot el local: no s'hi pot fer cap altra reserva aquella franja. */
+    @ColumnInfo(defaultValue = "0") val exclusiu: Boolean = false,
+    val apatId: String? = null,
 )
 
 enum class EstatMes { OBERT, INFORMAT, TANCAT }
@@ -144,6 +194,66 @@ data class Correu(
     val error: String? = null,
 )
 
+/** Convidat que surt a «Qui ets?» fins a les 7 del matí següent. Apunta al compte del soci que el porta. */
+@Serializable
+@Entity(tableName = "convidats")
+data class ConvidatDia(
+    @PrimaryKey val id: String,
+    val nom: String,
+    val sociId: String,
+    val creat: Long,
+    val caduca: Long,
+)
+
+enum class EstatBizum { PENDENT, REBUT, NO_ARRIBAT }
+
+@Serializable
+@Entity(tableName = "bizums")
+data class Bizum(
+    @PrimaryKey val id: String,
+    val sociId: String?, // null si paga algú de fora (activitat oberta)
+    val nom: String, // qui l'ha de fer
+    val concepte: String,
+    val import: Long,
+    val ts: Long,
+    val estat: EstatBizum = EstatBizum.PENDENT,
+    val confirmatPer: String? = null,
+    val confirmatTs: Long? = null,
+    val apatId: String? = null,
+    val externId: String? = null,
+)
+
+enum class TipusAvis { ESTOC_MINIM, CONSUM }
+
+@Serializable
+@Entity(tableName = "avisos")
+data class AvisEstoc(
+    @PrimaryKey val id: String,
+    val producteId: String,
+    val tipus: TipusAvis,
+    val missatge: String,
+    val ts: Long,
+    val llegit: Boolean = false,
+)
+
+enum class TipusPeticio(val nom: String) { FALTA("Falta"), PROPOSTA("Proposta") }
+enum class EstatPeticio { PENDENT, FETA, DESCARTADA }
+
+@Serializable
+@Entity(tableName = "peticions")
+data class Peticio(
+    @PrimaryKey val id: String,
+    val sociId: String,
+    val tipus: TipusPeticio,
+    val producteId: String? = null,
+    val text: String,
+    val ts: Long,
+    val estat: EstatPeticio = EstatPeticio.PENDENT,
+)
+
+@Serializable
+data class PreuCadira(val soci: Long = 0, val noSoci: Long = 0)
+
 @Serializable
 data class Config(
     val nomSocietat: String = "GastroBacus",
@@ -157,6 +267,18 @@ data class Config(
     val fixarPantalla: Boolean = true,
     val darreraCopiaTs: Long? = null,
     val darreraCopiaError: String? = null,
+    // Versió 2
+    val preusCadira: Map<TipusActivitat, PreuCadira> = mapOf(
+        TipusActivitat.PRIVAT to PreuCadira(200, 300),
+        TipusActivitat.SOCIS to PreuCadira(200, 300),
+        TipusActivitat.OBERT to PreuCadira(300, 500),
+    ),
+    val telefonBizum: String = "",
+    val correuReserves: String = "",
+    val correuAvisos: String = "",
+    val correuProveidor: String = "",
+    val horaFiDia: Int = 7, // els convidats desapareixen a aquesta hora
+    val favoritsPerSoci: Int = 8,
 )
 
 @Entity(tableName = "config")

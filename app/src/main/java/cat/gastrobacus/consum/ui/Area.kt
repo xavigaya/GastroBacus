@@ -149,3 +149,35 @@ fun CanviPin(model: AppModel, soci: Soci) {
     }
 }
 
+
+/** Pantalla d'un convidat del dia: només apuntar, i va al compte del soci que el porta. */
+@Composable
+fun AreaConvidat(model: AppModel, estat: Estat, soci: Soci, convidat: cat.gastrobacus.consum.dades.ConvidatDia) {
+    var apuntat by remember { mutableStateOf<Long?>(null) }
+    var darrerToc by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(darrerToc) { delay(INACTIVITAT_MS); model.surt() }
+    LaunchedEffect(apuntat) { if (apuntat != null) { delay(6000); model.surt() } }
+
+    Column(
+        Modifier.fillMaxSize().background(C.pedra).pointerInput(Unit) {
+            awaitPointerEventScope { while (true) { awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); darrerToc = System.currentTimeMillis() } }
+        },
+    ) {
+        BarraSuperior {
+            Text("${convidat.nom}, convidat de ${soci.nom}", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Boto("Acabar", { model.surt() }, tipus = Tipus.CAPCALERA, petit = true, icona = Icons.AutoMirrored.Filled.Logout)
+        }
+        Box(Modifier.weight(1f)) { Apuntar(model, estat, soci, convidat) { apuntat = it } }
+    }
+    apuntat?.let { total ->
+        AlertDialog(
+            onDismissRequest = { apuntat = null },
+            icon = { Avatar("✓", 72.dp, C.pampolSuau, C.pampol) },
+            title = { Text("Apuntat, ${convidat.nom}", style = MaterialTheme.typography.headlineMedium) },
+            text = { Column(horizontalAlignment = Alignment.CenterHorizontally) { XifraText(euros(total), 38.sp) } },
+            confirmButton = { Boto("Fet", { apuntat = null; model.surt() }) },
+            dismissButton = { Boto("Apuntar més", { apuntat = null }, tipus = Tipus.FANTASMA) },
+            containerColor = C.superficie,
+        )
+    }
+}

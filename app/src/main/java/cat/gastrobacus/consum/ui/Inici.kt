@@ -157,6 +157,9 @@ fun QuiEts(model: AppModel, estat: Estat) {
     val socis = estat.socisActius
     val lletres = socis.map { it.nom.first().uppercaseChar() }.distinct()
     val llista = if (lletra == null) socis else socis.filter { it.nom.first().uppercaseChar() == lletra }
+    var ara by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(60_000); ara = System.currentTimeMillis() } }
+    val convidats = estat.convidatsActius(ara)
 
     Column(Modifier.fillMaxSize().background(C.pedra)) {
         BarraSuperior()
@@ -170,6 +173,11 @@ fun QuiEts(model: AppModel, estat: Estat) {
                 GridCells.Adaptive(200.dp), Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (convidats.isNotEmpty() && lletra == null) {
+                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { Text("Convidats d'avui", style = MaterialTheme.typography.titleLarge) }
+                    items(convidats, key = { it.id }) { c -> FitxaConvidat(c.nom, estat.soci(c.sociId)?.nom ?: "") { model.entraConvidat(c.id) } }
+                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { Text("Socis", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp)) }
+                }
                 items(llista, key = { it.id }) { s -> FitxaSoci(s) { model.triaSoci(s.id) } }
             }
         }
@@ -184,6 +192,21 @@ private fun Lletra(t: String, sel: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick).padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) { Text(t, style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp), color = if (sel) C.sobreMost else C.roure) }
+}
+
+@Composable
+private fun FitxaConvidat(nom: String, deQui: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp)).background(C.ambreSuau)
+            .border(2.dp, C.ambre, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Avatar(nom.take(1).uppercase(), 50.dp, C.superficie, C.roure)
+        Column {
+            Text(nom, style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp), maxLines = 1)
+            Suau("Convidat de $deQui", mida = 14.sp)
+        }
+    }
 }
 
 @Composable

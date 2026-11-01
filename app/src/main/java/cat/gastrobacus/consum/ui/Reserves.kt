@@ -83,11 +83,15 @@ fun Reserves(model: AppModel, estat: Estat, soci: Soci) {
                     Desplegable(Franja.entries, franja, { it.nom }, { franja = it }, Modifier.weight(1f), "Quan")
                     Camp("Persones", persones, { if (it.length <= 3 && it.all(Char::isDigit)) persones = it }, Modifier.weight(1f), teclat = KeyboardType.Number)
                 }
-                Desplegable(estat.config.espais, espai, { it }, { espai = it }, Modifier.fillMaxWidth(), "Espai")
+                Desplegable(
+                    estat.config.espais + cat.gastrobacus.consum.dades.TOT_EL_LOCAL, espai,
+                    { if (it == cat.gastrobacus.consum.dades.TOT_EL_LOCAL) "Tot el local (no es comparteix)" else it }, { espai = it }, Modifier.fillMaxWidth(), "Espai",
+                )
+                if (estat.config.correuReserves.isNotBlank()) Suau("Se n'enviarà un avís al responsable de reserves.", mida = 14.sp)
                 Camp("Notes", notes, { notes = it }, placeholder = "Opcional: motiu, necessitats…")
                 Boto(
                     "Reservar",
-                    { model.accio("Reserva feta", { notes = "" }) { model.repo.creaReserva(soci.id, dia, franja, espai, persones.toIntOrNull() ?: 0, notes) } },
+                    { model.accio("Reserva feta", { notes = "" }) { model.repo.creaReserva(soci.id, dia, franja, espai, persones.toIntOrNull() ?: 0, notes); model.enviaEnSegonPla() } },
                     enabled = dia >= avui && espai.isNotBlank() && (persones.toIntOrNull() ?: 0) > 0,
                 )
             }
@@ -100,7 +104,7 @@ fun Reserves(model: AppModel, estat: Estat, soci: Soci) {
     anulant?.let { r ->
         Confirmacio(
             "Anul·lar la reserva", "${dataLlarga(r.data)}, ${r.franja.nom.lowercase()}: ${r.espai}.", "Anul·lar la reserva",
-            onConfirma = { anulant = null; model.accio("Reserva anul·lada") { model.repo.eliminaReserva(r.id) } },
+            onConfirma = { anulant = null; model.accio("Reserva anul·lada") { model.repo.eliminaReserva(r.id, soci.id); model.enviaEnSegonPla() } },
             onCancela = { anulant = null }, perill = true,
         )
     }
@@ -115,9 +119,10 @@ private fun FilaReserva(estat: Estat, r: Reserva, soci: Soci, mostraData: Boolea
                 (if (mostraData) dataLlarga(r.data) + ", " else "") + r.franja.nom.lowercase().replaceFirstChar { if (mostraData) it else it.uppercaseChar() },
                 style = MaterialTheme.typography.titleMedium,
             )
-            Suau("${r.espai}, ${r.persones} persones" + (if (qui != null && r.sociId != soci.id) ", ${qui.nomComplet}" else "") + (if (r.notes.isNotBlank()) ". ${r.notes}" else ""), mida = 14.sp)
+            Suau((if (r.exclusiu) "Tot el local" else r.espai) + ", ${r.persones} persones" + (if (qui != null && r.sociId != soci.id) ", ${qui.nomComplet}" else "") + (if (r.notes.isNotBlank()) ". ${r.notes}" else ""), mida = 14.sp)
         }
-        if (r.sociId == soci.id || soci.esJunta) Boto("Anul·lar", onAnula, tipus = Tipus.FANTASMA, petit = true)
+        if (r.apatId != null) Etiqueta("Activitat", ToEtiqueta.MOST)
+        else if (r.sociId == soci.id || soci.esJunta) Boto("Anul·lar", onAnula, tipus = Tipus.FANTASMA, petit = true)
     }
 }
 

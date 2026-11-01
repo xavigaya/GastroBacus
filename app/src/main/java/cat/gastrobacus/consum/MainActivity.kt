@@ -1,6 +1,7 @@
 package cat.gastrobacus.consum
 
 import android.app.Application
+import kotlinx.coroutines.launch
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -31,6 +32,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cat.gastrobacus.consum.google.Google
 import cat.gastrobacus.consum.ui.AppModel
+import cat.gastrobacus.consum.ui.AreaConvidat
 import cat.gastrobacus.consum.ui.AreaSoci
 import cat.gastrobacus.consum.ui.C
 import cat.gastrobacus.consum.ui.ConfiguracioInicial
@@ -43,8 +45,9 @@ import cat.gastrobacus.consum.ui.TemaGastroBacus
 class Aplicacio : Application() {
     override fun onCreate() {
         super.onCreate()
-        Serveis.de(this)
+        val s = Serveis.de(this)
         programaCopiaDiaria(this)
+        s.ambit.launch { runCatching { s.repo.netejaConvidats() } }
     }
 }
 
@@ -105,6 +108,9 @@ fun App(model: AppModel) {
                     is Pantalla.QuiEts -> QuiEts(model, estat)
                     is Pantalla.Pin -> estat.soci(p.sociId)?.let { PantallaPin(model, it) } ?: QuiEts(model, estat)
                     is Pantalla.Area -> estat.soci(p.sociId)?.takeIf { it.actiu }?.let { AreaSoci(model, estat, it) } ?: QuiEts(model, estat)
+                    is Pantalla.Convidat -> estat.convidat(p.convidatId)?.takeIf { it.caduca > System.currentTimeMillis() }?.let { c ->
+                        estat.soci(c.sociId)?.let { AreaConvidat(model, estat, it, c) }
+                    } ?: QuiEts(model, estat)
                 }
             }
             if (model.ocupat) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = C.most) }

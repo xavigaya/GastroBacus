@@ -65,6 +65,8 @@ fun ElMeuConsum(estat: Estat, soci: Soci) {
                     Etiqueta("Consumicions ${euros(inf.totalConsum)}")
                     if (inf.totalApats != 0L) Etiqueta("Àpats ${euros(inf.totalApats)}")
                     if (inf.totalAbonaments != 0L) Etiqueta("Despeses avançades ${euros(inf.totalAbonaments)}", ToEtiqueta.VERD)
+                    val bizum = estat.consums.filter { it.sociId == soci.id && !it.anulat && it.pagament == cat.gastrobacus.consum.dades.Pagament.BIZUM && mesDe(it.ts) == mes }.sumOf { it.import }
+                    if (bizum > 0) Etiqueta("Pagat per Bizum ${euros(bizum)} (no hi suma)", ToEtiqueta.MOST)
                 }
                 perCat.forEach { (c, v) ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

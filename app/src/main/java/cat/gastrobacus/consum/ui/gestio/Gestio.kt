@@ -44,8 +44,8 @@ import cat.gastrobacus.consum.ui.Titol
 import cat.gastrobacus.consum.ui.XifraText
 
 enum class SeccioGestio(val titol: String) {
-    RESUM("Resum"), CONSUMICIONS("Consumicions"), PRODUCTES("Productes"), ESTOC("Estoc"), SOCIS("Socis"),
-    TANCAMENT("Tancament de mes"), CORREUS("Correus"), COPIES("Còpies"), CONFIGURACIO("Configuració"),
+    RESUM("Resum"), CONSUMICIONS("Consumicions"), PRODUCTES("Productes"), ESTOC("Estoc"), COMANDES("Comandes"), BIZUMS("Bizums"),
+    SOCIS("Socis"), TANCAMENT("Tancament de mes"), CORREUS("Correus"), COPIES("Còpies"), CONFIGURACIO("Configuració"),
 }
 
 @Composable
@@ -58,7 +58,13 @@ fun Gestio(model: AppModel, estat: Estat, soci: Soci) {
         Titol("Gestió")
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SeccioGestio.entries.forEach { x ->
-                val n = when (x) { SeccioGestio.ESTOC -> perReposar; SeccioGestio.CORREUS -> pendents; else -> 0 }
+                val n = when (x) {
+                    SeccioGestio.ESTOC -> maxOf(perReposar, estat.avisosNous.size)
+                    SeccioGestio.COMANDES -> estat.peticionsPendents.size
+                    SeccioGestio.BIZUMS -> estat.bizumsPendents.size
+                    SeccioGestio.CORREUS -> pendents
+                    else -> 0
+                }
                 Pindola(x.titol + if (n > 0) "  $n" else "", s == x, { s = x })
             }
         }
@@ -68,6 +74,8 @@ fun Gestio(model: AppModel, estat: Estat, soci: Soci) {
                 SeccioGestio.CONSUMICIONS -> GestioConsumicions(model, estat, soci)
                 SeccioGestio.PRODUCTES -> GestioProductes(model, estat)
                 SeccioGestio.ESTOC -> GestioEstoc(model, estat, soci)
+                SeccioGestio.COMANDES -> GestioComandes(model, estat)
+                SeccioGestio.BIZUMS -> GestioBizums(model, estat, soci)
                 SeccioGestio.SOCIS -> GestioSocis(model, estat)
                 SeccioGestio.TANCAMENT -> Tancament(model, estat)
                 SeccioGestio.CORREUS -> Correus(model, estat)
@@ -95,8 +103,17 @@ private fun Resum(estat: Estat, onVes: (SeccioGestio) -> Unit) {
             Xifra("Total ${deMes(mes)}", euros(informes.sumOf { it.total }), "fins avui", Modifier.weight(1f))
             Xifra("Consumicions", consumsMes.sumOf { it.quantitat }.toString(), "${consumsMes.map { it.sociId }.distinct().size} socis diferents", Modifier.weight(1f))
             Xifra("Per reposar", perReposar.size.toString(), "productes amb poc estoc", Modifier.weight(1f), alerta = perReposar.isNotEmpty())
-            Xifra("Àpats oberts", oberts.toString(), "pendents de passar als comptes", Modifier.weight(1f))
+            Xifra("Activitats obertes", oberts.toString(), "pendents de passar als comptes", Modifier.weight(1f))
         }
+        if (estat.avisosNous.isNotEmpty()) Avis(
+            estat.avisosNous.take(3).joinToString(" ") { it.missatge } + if (estat.avisosNous.size > 3) " I ${estat.avisosNous.size - 3} avisos més." else "",
+        ) { Boto("Veure l'estoc", { onVes(SeccioGestio.ESTOC) }, tipus = Tipus.FANTASMA, petit = true) }
+        if (estat.peticionsPendents.isNotEmpty()) Avis(
+            "Peticions dels socis: " + estat.peticionsPendents.joinToString { "${it.tipus.nom.lowercase()} ${it.text}" } + ".",
+        ) { Boto("Comandes", { onVes(SeccioGestio.COMANDES) }, tipus = Tipus.FANTASMA, petit = true) }
+        if (estat.bizumsPendents.isNotEmpty()) Avis(
+            "${estat.bizumsPendents.size} Bizums pendents de confirmar (${euros(estat.bizumsPendents.sumOf { it.import })}).",
+        ) { Boto("Confirmar", { onVes(SeccioGestio.BIZUMS) }, tipus = Tipus.FANTASMA, petit = true) }
         if (pendentsTancar.isNotEmpty()) Avis(
             pendentsTancar.joinToString { nomMes(it) } + if (pendentsTancar.size > 1) " encara no estan tancats." else " encara no està tancat.",
         ) { Boto("Anar al tancament", { onVes(SeccioGestio.TANCAMENT) }, tipus = Tipus.FANTASMA, petit = true) }

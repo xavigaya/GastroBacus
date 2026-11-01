@@ -1,6 +1,7 @@
 package cat.gastrobacus.consum.dades
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
@@ -21,6 +22,10 @@ class Conversors {
     @TypeConverter fun aAssistents(v: String): List<Assistent> = JSON.decodeFromString(v)
     @TypeConverter fun despesesA(v: List<DespesaApat>): String = JSON.encodeToString(v)
     @TypeConverter fun aDespeses(v: String): List<DespesaApat> = JSON.decodeFromString(v)
+    @TypeConverter fun periodesA(v: List<Periode>): String = JSON.encodeToString(v)
+    @TypeConverter fun aPeriodes(v: String): List<Periode> = JSON.decodeFromString(v)
+    @TypeConverter fun externsA(v: List<Extern>): String = JSON.encodeToString(v)
+    @TypeConverter fun aExterns(v: String): List<Extern> = JSON.decodeFromString(v)
 }
 
 @Dao
@@ -94,12 +99,47 @@ interface Dao_ {
     @Query("DELETE FROM config") suspend fun buidaConfig()
 
     @Delete suspend fun eliminaSoci(s: Soci)
+
+    // Convidats del dia
+    @Query("SELECT * FROM convidats") fun convidats(): Flow<List<ConvidatDia>>
+    @Query("SELECT * FROM convidats") suspend fun totsConvidats(): List<ConvidatDia>
+    @Upsert suspend fun desaConvidat(c: ConvidatDia)
+    @Query("DELETE FROM convidats WHERE caduca < :ara") suspend fun netejaConvidats(ara: Long)
+    @Query("DELETE FROM convidats") suspend fun buidaConvidats()
+
+    // Bizums
+    @Query("SELECT * FROM bizums ORDER BY ts DESC") fun bizums(): Flow<List<Bizum>>
+    @Query("SELECT * FROM bizums") suspend fun totsBizums(): List<Bizum>
+    @Query("SELECT * FROM bizums WHERE id = :id") suspend fun bizum(id: String): Bizum?
+    @Upsert suspend fun desaBizum(b: Bizum)
+    @Query("DELETE FROM bizums WHERE id = :id") suspend fun eliminaBizum(id: String)
+    @Query("DELETE FROM bizums") suspend fun buidaBizums()
+    @Query("SELECT * FROM consums WHERE bizumId = :id") suspend fun consumsDeBizum(id: String): List<Consum>
+
+    // Avisos d'estoc
+    @Query("SELECT * FROM avisos ORDER BY ts DESC") fun avisos(): Flow<List<AvisEstoc>>
+    @Query("SELECT * FROM avisos") suspend fun totsAvisos(): List<AvisEstoc>
+    @Upsert suspend fun desaAvis(a: AvisEstoc)
+    @Query("UPDATE avisos SET llegit = 1") suspend fun marcaAvisosLlegits()
+    @Query("DELETE FROM avisos") suspend fun buidaAvisos()
+
+    // Peticions
+    @Query("SELECT * FROM peticions ORDER BY ts DESC") fun peticions(): Flow<List<Peticio>>
+    @Query("SELECT * FROM peticions") suspend fun totesPeticions(): List<Peticio>
+    @Upsert suspend fun desaPeticio(p: Peticio)
+    @Query("DELETE FROM peticions") suspend fun buidaPeticions()
+
+    @Query("SELECT * FROM reserves WHERE apatId = :apatId") suspend fun reservaDApat(apatId: String): Reserva?
 }
 
 @Database(
-    entities = [Soci::class, Producte::class, Consum::class, Reposicio::class, Apat::class, Reserva::class, Tancament::class, Correu::class, ConfigFila::class],
-    version = 1,
+    entities = [
+        Soci::class, Producte::class, Consum::class, Reposicio::class, Apat::class, Reserva::class, Tancament::class, Correu::class, ConfigFila::class,
+        ConvidatDia::class, Bizum::class, AvisEstoc::class, Peticio::class,
+    ],
+    version = 2,
     exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @TypeConverters(Conversors::class)
 abstract class BaseDades : RoomDatabase() {

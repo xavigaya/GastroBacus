@@ -188,6 +188,21 @@ fun Configuracio(model: AppModel, estat: Estat) {
     var dies by remember(cfg) { mutableStateOf(cfg.diesReclamacio.toString()) }
     var proves by remember(cfg) { mutableStateOf(cfg.modeProves) }
     var correuProves by remember(cfg) { mutableStateOf(cfg.correuProves) }
+    var telefonBizum by remember(cfg) { mutableStateOf(cfg.telefonBizum) }
+    var correuReserves by remember(cfg) { mutableStateOf(cfg.correuReserves) }
+    var correuAvisos by remember(cfg) { mutableStateOf(cfg.correuAvisos) }
+    var correuProveidor by remember(cfg) { mutableStateOf(cfg.correuProveidor) }
+    var horaFi by remember(cfg) { mutableStateOf(cfg.horaFiDia.toString()) }
+    var nFavorits by remember(cfg) { mutableStateOf(cfg.favoritsPerSoci.toString()) }
+    val cadires = remember(cfg) {
+        androidx.compose.runtime.mutableStateMapOf<String, String>().apply {
+            cat.gastrobacus.consum.dades.TipusActivitat.entries.forEach { t ->
+                val pc = cfg.preusCadira[t] ?: cat.gastrobacus.consum.dades.PreuCadira()
+                put("${t.name}-s", cat.gastrobacus.consum.dades.euros(pc.soci).removeSuffix(" €"))
+                put("${t.name}-n", cat.gastrobacus.consum.dades.euros(pc.noSoci).removeSuffix(" €"))
+            }
+        }
+    }
     var confirmaDadesProva by remember { mutableStateOf(false) }
     var refresc by remember { mutableIntStateOf(0) }
     val fixada = remember(refresc) { Quiosc.estaFixada(context) }
@@ -218,8 +233,34 @@ fun Configuracio(model: AppModel, estat: Estat) {
                 Camp("Minuts per desfer una consumició", minuts, { if (it.length <= 3 && it.all(Char::isDigit)) minuts = it }, Modifier.weight(1f), teclat = KeyboardType.Number)
                 Camp("Dies per reclamar l'informe", dies, { if (it.length <= 2 && it.all(Char::isDigit)) dies = it }, Modifier.weight(1f), teclat = KeyboardType.Number)
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Camp("Hora en què desapareixen els convidats", horaFi, { if (it.length <= 2 && it.all(Char::isDigit)) horaFi = it }, Modifier.weight(1f), teclat = KeyboardType.Number, ajuda = "Del matí següent, de 0 a 23.")
+                Camp("Favorits habituals per soci", nFavorits, { if (it.length <= 2 && it.all(Char::isDigit)) nFavorits = it }, Modifier.weight(1f), teclat = KeyboardType.Number, ajuda = "A més dels que marca la junta.")
+            }
             Casella("Mode de proves: enviar tots els correus a una sola adreça", proves, { proves = it })
             if (proves) Camp("Adreça de proves", correuProves, { correuProves = it }, teclat = KeyboardType.Email)
+        }
+
+        Bloc(Modifier.fillMaxWidth()) {
+            Subtitol("Preu de la cadira")
+            Suau("Per persona i activitat. El soci paga la seva a preu de soci i la dels seus convidats a preu de no soci.")
+            cat.gastrobacus.consum.dades.TipusActivitat.entries.forEach { t ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1.4f)) { Text(t.nom, style = MaterialTheme.typography.titleMedium); Suau(t.descripcio, mida = 14.sp) }
+                    Camp("Soci (€)", cadires["${t.name}-s"] ?: "", { cadires["${t.name}-s"] = it }, Modifier.weight(1f), teclat = KeyboardType.Decimal)
+                    Camp("No soci (€)", cadires["${t.name}-n"] ?: "", { cadires["${t.name}-n"] = it }, Modifier.weight(1f), teclat = KeyboardType.Decimal)
+                }
+            }
+        }
+
+        Bloc(Modifier.fillMaxWidth()) {
+            Subtitol("Bizum i avisos")
+            Camp("Telèfon per als Bizums", telefonBizum, { telefonBizum = it }, teclat = KeyboardType.Phone, ajuda = "Si és buit, no surt l'opció de pagar per Bizum.")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Camp("Responsable de reserves", correuReserves, { correuReserves = it }, Modifier.weight(1f), teclat = KeyboardType.Email, ajuda = "Rep un correu a cada reserva i anul·lació.")
+                Camp("Avisos d'estoc i peticions", correuAvisos, { correuAvisos = it }, Modifier.weight(1f), teclat = KeyboardType.Email, ajuda = "Junta o encarregat del magatzem.")
+            }
+            Camp("Correu del proveïdor", correuProveidor, { correuProveidor = it }, teclat = KeyboardType.Email, ajuda = "Per defecte a les comandes.")
             Boto("Desar la configuració", {
                 model.accio("Configuració desada") {
                     model.repo.actualitzaConfig {
@@ -228,6 +269,15 @@ fun Configuracio(model: AppModel, estat: Estat) {
                             espais = espais.lines().map(String::trim).filter(String::isNotBlank).ifEmpty { it.espais },
                             minutsDesfer = minuts.toIntOrNull() ?: it.minutsDesfer, diesReclamacio = dies.toIntOrNull() ?: it.diesReclamacio,
                             modeProves = proves, correuProves = correuProves.trim(),
+                            telefonBizum = telefonBizum.trim(), correuReserves = correuReserves.trim(), correuAvisos = correuAvisos.trim(),
+                            correuProveidor = correuProveidor.trim(), horaFiDia = (horaFi.toIntOrNull() ?: it.horaFiDia).coerceIn(0, 23),
+                            favoritsPerSoci = (nFavorits.toIntOrNull() ?: it.favoritsPerSoci).coerceIn(0, 30),
+                            preusCadira = cat.gastrobacus.consum.dades.TipusActivitat.entries.associateWith { t ->
+                                cat.gastrobacus.consum.dades.PreuCadira(
+                                    cat.gastrobacus.consum.dades.llegirEuros(cadires["${t.name}-s"] ?: "") ?: 0,
+                                    cat.gastrobacus.consum.dades.llegirEuros(cadires["${t.name}-n"] ?: "") ?: 0,
+                                )
+                            },
                         )
                     }
                 }

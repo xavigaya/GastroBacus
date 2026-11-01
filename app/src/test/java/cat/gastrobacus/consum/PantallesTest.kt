@@ -65,32 +65,45 @@ class PantallesTest {
     @Test fun recorregutSoci() {
         captura("01-qui-ets")
         toca("Anna")
-        toca("1"); toca("2")
-        captura("02-pin")
-        toca("3"); toca("4")
-        toca("Cervesa Moritz 33 cl"); toca("Cervesa Moritz 33 cl"); toca("Estrella Damm 33 cl")
-        captura("03-apuntar")
-        toca("Apuntar al meu compte")
-        captura("04-apuntat")
-        toca("Apuntar més")
-        captura("05-avui")
-        toca("El meu consum")
-        captura("06-consum")
-        toca("Reserves")
-        captura("07-reserves")
+        toca("1"); toca("2"); toca("3"); toca("4")
+        captura("02-apuntar-favorits")
+        toca("Tot")
+        captura("03-apuntar-per-tipus")
+        toca("Cervesa Moritz 33 cl"); toca("Cervesa Moritz 33 cl")
+        toca("Pagar ara per Bizum")
+        regla.onNodeWithText("Ja l'he fet").assertExists()
+        regla.onNodeWithText("600 123 456").assertExists()
+        captura("04-bizum")
+        toca("Cancel·lar")
+        toca("Falta alguna cosa?")
+        regla.onNodeWithText("Proposar-ne un de nou").assertExists()
+        captura("05-falta")
+        toca("Cancel·lar")
         toca("Àpats")
-        captura("08-apats")
-        toca("Sopar de caragols")
-        captura("09-apat")
+        captura("06-activitats")
+        toca("Arrossada popular")
+        captura("07-activitat-oberta")
+        toca("Reserves")
+        captura("08-reserves")
+    }
+
+    @Test fun recorregutConvidat() {
+        toca("Marc")
+        captura("09-convidat")
     }
 
     @Test fun recorregutJunta() {
         entraCom("Jordi")
         toca("Gestió")
         captura("10-gestio-resum")
-        listOf("Consumicions", "Productes", "Estoc", "Socis", "Tancament de mes", "Còpies", "Configuració").forEachIndexed { i, s ->
+        listOf("Estoc", "Comandes", "Bizums", "Socis", "Configuració").forEachIndexed { i, s ->
             regla.onAllNodesWithText(s, substring = true)[0].performClick()
-            captura("%02d-gestio-%s".format(11 + i, s.lowercase().replace(" ", "-").replace("ò", "o").replace("ó", "o")))
+            captura("%02d-gestio-%s".format(11 + i, s.lowercase().replace("ó", "o")))
         }
+        regla.onAllNodesWithText("Estoc", substring = true)[0].performClick(); espera()
+        regla.onAllNodesWithText("Comanda", substring = false, useUnmergedTree = true)[0].performClick()
+        espera()
+        regla.onNodeWithText("Registrar la comanda").assertExists()
+        regla.onNodeWithText("Recompte").assertExists()
     }
 }

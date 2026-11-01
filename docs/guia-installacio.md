@@ -119,6 +119,32 @@ Si a les 4 no hi ha connexió, la còpia es fa quan torni. A **Gestió** > **Cò
 
 ---
 
+---
+
+## 4. Posada en marxa
+
+Entra amb un membre de la junta a **Gestió** > **Configuració** i omple:
+
+- **Preu de la cadira** per a cada tipus d'activitat (privada, de socis, oberta), per a socis i per a no socis.
+- **Telèfon per als Bizums**. Si es deixa buit, no surt l'opció de pagar per Bizum.
+- **Responsable de reserves**: rep un correu a cada reserva o anul·lació.
+- **Avisos d'estoc i peticions**: rep els avisos d'estoc mínim, de quantitat consumida i les peticions dels socis.
+- **Correu del proveïdor**: per defecte a les comandes.
+
+Recorda desactivar el **mode de proves** quan es comenci a fer servir de debò: mentre estigui activat, tots els correus van a l'adreça de proves.
+
+### Importar els socis i els productes
+
+1. Omple les plantilles `docs/plantilles/socis.csv` i `docs/plantilles/productes.csv` amb l'Excel (o el Full de càlcul de Google) i desa-les com a **CSV separat per punt i coma**.
+   - Productes: `nom`, `categoria` (Cervesa, Vi, Refrescos, Aigua, Cafè i licors, Picar), `preu`, `preu_convidat`, `estoc` (inventari inicial), `estoc_minim`, `avis_consum`, `favorit` (si/no).
+   - Socis: `nom`, `cognoms`, `correu`, `ref_banc`, `pin` (4 xifres), `junta` (si/no), `data_alta`.
+2. Posa els fitxers a la tauleta: per exemple, al Google Drive del compte de la tauleta o a les Descàrregues (enviant-los per correu).
+3. **Gestió** > **Productes** (o **Socis**) > **Importar CSV** > **Triar el fitxer**. L'app mostra quantes files ha llegit i els errors abans d'importar.
+
+Els productes i socis que ja existeixen (mateix nom o correu) s'actualitzen; els nous es creen. Des de la mateixa finestra es pot enviar la plantilla per correu.
+
+---
+
 ## Si alguna cosa falla
 
 | Què passa | Què fer |
@@ -128,6 +154,7 @@ Si a les 4 no hi ha connexió, la còpia es fa quan torni. A **Gestió** > **Cò
 | *Cal tornar a iniciar la sessió amb Google* | Gestió > Configuració > Tornar a iniciar la sessió. |
 | Els correus queden pendents | Gestió > Correus > Enviar els pendents. Mira el missatge d'error de cada correu. |
 | S'ha espatllat la tauleta | A la tauleta nova: instal·la l'APK > Recuperar una còpia del Drive. |
+| La importació no reconeix les columnes | Comprova que la primera fila té els noms de la plantilla i que el fitxer és CSV, no .xlsx. |
 | S'ha perdut el PIN de la junta | Si hi ha un altre membre de la junta, que el canviï des de Gestió > Socis. Si no, cal recuperar una còpia anterior o començar de zero. |
 
 ## Fitxers que cal guardar

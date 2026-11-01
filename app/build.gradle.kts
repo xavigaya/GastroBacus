@@ -22,8 +22,8 @@ android {
         applicationId = "cat.gastrobacus.consum"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -51,6 +51,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    // Esquemes de Room disponibles per a les proves de migració
+    sourceSets { getByName("debug").assets.srcDirs(files("$projectDir/schemas")) }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -91,6 +93,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.room.testing)
     testImplementation(libs.coroutines.test)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)

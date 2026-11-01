@@ -65,11 +65,15 @@ object DadesProva {
                 id = "s${i + 1}", nom = nom, cognoms = cognoms,
                 email = "${senseAccents(nom)}.${senseAccents(cognoms.substringBefore(' '))}@exemple.cat",
                 rol = rol, pinHash = Pin.hash(PIN, sal), pinSal = sal, refBanc = "GB-%04d".format(i + 1),
+                periodes = listOf(Periode("%d-%02d-01".format(2012 + i % 13, 1 + i % 12))),
             )
         }
         val productes = PRODUCTES.mapIndexed { i, p ->
-            Producte("p${i + 1}", p.nom, p.cat, p.preu, p.conv, p.estoc, p.minim, controlaEstoc = p.minim > 0)
-        }
+            Producte(
+                "p${i + 1}", p.nom, p.cat, p.preu, p.conv, p.estoc, p.minim, controlaEstoc = p.minim > 0,
+                favorit = i == 0 || i == 21, avisConsum = if (i < 2) 48 else 0,
+            )
+        }.toMutableList()
 
         // Consumicions des de l'1 del mes passat fins fa una hora
         val avui = LocalDate.now(ZONA)
@@ -93,6 +97,33 @@ object DadesProva {
             dia = dia.plusDays(1)
         }
 
+        // Uns quants pagaments per Bizum dels darrers dies (dos confirmats i un pendent)
+        val bizums = mutableListOf<Bizum>()
+        consums.filter { it.ts > ara - 4 * 86_400_000L && it.convidat == null }.take(3).forEachIndexed { i, c ->
+            val b = Bizum(nouId(), c.sociId, socis.first { it.id == c.sociId }.nomComplet, c.nomProducte, c.import, c.ts,
+                if (i < 2) EstatBizum.REBUT else EstatBizum.PENDENT, if (i < 2) "s1" else null, if (i < 2) c.ts + 3_600_000L else null)
+            bizums += b
+            consums[consums.indexOf(c)] = c.copy(pagament = Pagament.BIZUM, bizumId = b.id)
+        }
+
+        // Comptador de consum des de la darrera comanda (l'1 d'aquest mes) i avisos dels productes amb poc estoc
+        val iniciMes = avui.withDayOfMonth(1).atStartOfDay(ZONA).toInstant().toEpochMilli()
+        val avisos = mutableListOf<AvisEstoc>()
+        for (i in productes.indices) {
+            val p = productes[i]
+            val n = consums.filter { it.producteId == p.id && it.ts >= iniciMes }.sumOf { it.quantitat }
+            var q = p.copy(comptador = n, darreraComandaTs = iniciMes)
+            if (q.calReposar) {
+                avisos += AvisEstoc(nouId(), q.id, TipusAvis.ESTOC_MINIM, "${q.nom}: en queden ${q.estoc} (el mínim és ${q.estocMinim}).", ara - 7_200_000L)
+                q = q.copy(avisMinimFet = true)
+            }
+            if (q.avisConsum in 1..q.comptador) {
+                avisos += AvisEstoc(nouId(), q.id, TipusAvis.CONSUM, "${q.nom}: se n'han consumit ${q.comptador} des de la darrera comanda.", ara - 3_600_000L)
+                q = q.copy(avisConsumFet = true)
+            }
+            productes[i] = q
+        }
+
         val mes = YearMonth.from(avui)
         val mesPassat = mes.minusMonths(1)
         val apats = listOf(
@@ -105,25 +136,45 @@ object DadesProva {
                     DespesaApat(nouId(), "s1", "Pa i postres", 2120),
                 ),
                 EstatApat.TANCAT,
+                tipus = TipusActivitat.SOCIS, franja = Franja.DINAR, espai = TOT_EL_LOCAL, cadiraSoci = 200, cadiraNoSoci = 300,
             ),
             Apat(
                 nouId(), "Sopar de caragols", mes.atDay(maxOf(1, minOf(avui.dayOfMonth - 1, 17))).toString(), "s3", ModeRepartiment.PROPORCIONAL,
                 listOf(Assistent("s3"), Assistent("s6"), Assistent("s8", 2, 3.0), Assistent("s10", 0, 0.5), Assistent("s13")),
                 listOf(DespesaApat(nouId(), "s3", "Caragols (3 kg)", 5400), DespesaApat(nouId(), "s13", "Allioli, pa i amanida", 1840)),
+                tipus = TipusActivitat.PRIVAT, franja = Franja.SOPAR, espai = "Cuina i menjador gran", cadiraSoci = 200, cadiraNoSoci = 300,
+            ),
+            Apat(
+                "arrossada", "Arrossada popular", avui.plusDays(9).toString(), "s7", ModeRepartiment.IGUALS,
+                listOf(Assistent("s7"), Assistent("s1", 1), Assistent("s11"), Assistent("s16", 2), Assistent("s20")),
+                listOf(DespesaApat(nouId(), "s7", "Arròs, marisc i verdura", 9800)),
+                tipus = TipusActivitat.OBERT, franja = Franja.TOT_EL_DIA, espai = TOT_EL_LOCAL, cadiraSoci = 300, cadiraNoSoci = 500,
+                externs = listOf(Extern("e1", "Família Roca (veïns)"), Extern("e2", "Sílvia Mas")),
             ),
         )
 
-        val cfg = Config()
+        val cfg = Config(
+            telefonBizum = "600 123 456",
+            correuReserves = "reserves@exemple.cat",
+            correuAvisos = "magatzem@exemple.cat",
+            correuProveidor = "comandes@distribucions-exemple.cat",
+        )
         val reserves = listOf(
             Reserva(nouId(), "s4", avui.plusDays(2).toString(), Franja.SOPAR, cfg.espais[0], 12, "Aniversari", ara - 3 * 86_400_000L),
             Reserva(nouId(), "s11", avui.plusDays(3).toString(), Franja.DINAR, cfg.espais[1], 6, "", ara - 2 * 86_400_000L),
-            Reserva(nouId(), "s7", avui.plusDays(9).toString(), Franja.TOT_EL_DIA, cfg.espais[0], 20, "Arrossada popular", ara - 86_400_000L),
+            Reserva(nouId(), "s7", avui.plusDays(9).toString(), Franja.TOT_EL_DIA, TOT_EL_LOCAL, 13, "Activitat oberta: Arrossada popular", ara - 86_400_000L, exclusiu = true, apatId = "arrossada"),
         )
         val tancaments = listOf(Tancament(mesPassat.minusMonths(1).toString(), EstatMes.TANCAT, ara - 50 * 86_400_000L, ara - 44 * 86_400_000L))
 
         return Copia(
             ts = ara, config = cfg, socis = socis, productes = productes, consums = consums,
             reposicions = emptyList(), apats = apats, reserves = reserves, tancaments = tancaments, correus = emptyList(),
+            convidats = listOf(ConvidatDia("c1", "Marc", "s5", ara - 1_800_000L, caducaConvidat(ara, cfg.horaFiDia))),
+            bizums = bizums, avisos = avisos,
+            peticions = listOf(
+                Peticio(nouId(), "s9", TipusPeticio.FALTA, "p15", "Fanta de llimona", ara - 5_400_000L),
+                Peticio(nouId(), "s12", TipusPeticio.PROPOSTA, null, "Vermut negre de Reus", ara - 2 * 86_400_000L),
+            ),
         )
     }
 }

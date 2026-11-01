@@ -8,17 +8,25 @@ L'app és **autoallotjada**: viu només a la tauleta, amb les dades en una base 
 
 **Soci (a la tauleta)**
 - Tria el seu nom i escriu el PIN de 4 xifres.
-- Apunta el que pren, també per a convidats (al seu compte, amb preu de convidat si el producte en té).
+- Apunta el que pren. Els productes surten agrupats per tipus i hi ha un filtre de **Favorits**: els que marca la junta i els que més pren cada soci.
+- Pot afegir **convidats**: van al seu compte (amb preu de convidat) i surten a la pantalla d'inici fins a les 7 del matí, perquè es puguin apuntar sols sense PIN.
+- Pot **pagar al moment per Bizum** en lloc d'anar a la factura mensual. La junta confirma que el Bizum ha arribat; si no, passa a la factura.
+- Pot avisar que **falta un producte** o proposar-ne un de nou.
 - Pot desfer una consumició durant 10 minuts.
 - Consulta el seu consum del mes, amb el detall.
 - Fa i anul·la reserves de la cuina o de les taules.
-- Crea i edita àpats compartits.
+- Crea i edita activitats (àpats): **privades**, **de socis** o **obertes** (també a persones de fora), amb l'espai (**tot el local** o compartit) i el **preu de la cadira** (diferent per a socis i no socis, segons el tipus).
 - Canvia el seu PIN.
 - Si ningú toca la tauleta durant 3 minuts, la sessió es tanca sola.
 
 **Junta**
 - Resum del mes, productes més demanats i avisos.
-- Productes i preus, socis, estoc amb avís de reposició.
+- Productes i preus, amb **importació des de CSV** de productes i inventari inicial.
+- **Estoc**: comptador de consum des de la darrera comanda; en arribar una comanda es pot sumar el que entra o fer un recompte, i el comptador torna a zero. **Avisos** a la tauleta i per correu quan un producte arriba a l'estoc mínim o se n'ha consumit una quantitat determinada.
+- **Comandes**: peticions dels socis i comanda al proveïdor per correu, amb la proposta del que cal reposar.
+- **Bizums** pendents de confirmar.
+- **Socis**: altes i baixes amb data i historial, liquidació en donar de baixa, tornar a donar d'alta i **importació des de CSV**.
+- Cada reserva (o activitat) envia un avís al **responsable de reserves**.
 - Correcció de consumicions i apuntar-ne a un soci.
 - Tancament de mes en tres passos:
   1. Revisar (Excel i PDF per correu).
@@ -65,4 +73,4 @@ En instal·lar-la, l'app ofereix carregar dades fictícies: 24 socis, 30 product
 
 - Format de la remesa bancària (SEPA) quan se sàpiga el banc.
 - Valorar targetes o clauers NFC per identificar-se.
-- Carregar els socis i productes reals.
+- Carregar els socis i productes reals (plantilles a `docs/plantilles/`).

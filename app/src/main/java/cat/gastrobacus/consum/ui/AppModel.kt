@@ -17,6 +17,7 @@ sealed interface Pantalla {
     data object QuiEts : Pantalla
     data class Pin(val sociId: String) : Pantalla
     data class Area(val sociId: String) : Pantalla
+    data class Convidat(val convidatId: String) : Pantalla
 }
 
 class AppModel(app: Application) : AndroidViewModel(app) {
@@ -39,6 +40,14 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun triaSoci(id: String) { pantalla = Pantalla.Pin(id) }
     fun entra(id: String) { pantalla = Pantalla.Area(id) }
     fun surt() { pantalla = Pantalla.QuiEts }
+    fun entraConvidat(id: String) { pantalla = Pantalla.Convidat(id) }
+
+    /** Envia sense avisar els correus pendents (avisos d'estoc, reserves…), si hi ha compte de Google. */
+    fun enviaEnSegonPla() {
+        viewModelScope.launch {
+            if (repo.config().compteGoogle != null) runCatching { serveis.enviaPendents(interactiu = false) }
+        }
+    }
 
     /** Executa una acció: mostra el missatge si va bé, o l'error si no. */
     fun accio(ok: String? = null, despres: (() -> Unit)? = null, bloc: suspend () -> Unit) {
