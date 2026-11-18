@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -36,6 +37,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cat.gastrobacus.consum.dades.Categoria
+import cat.gastrobacus.consum.dades.Csv
+import cat.gastrobacus.consum.exportar.Fitxer
+import cat.gastrobacus.consum.exportar.TIPUS_CSV
 import cat.gastrobacus.consum.dades.Estat
 import cat.gastrobacus.consum.dades.Producte
 import cat.gastrobacus.consum.dades.Rol
@@ -78,6 +82,7 @@ fun GestioProductes(model: AppModel, estat: Estat) {
     var editant by remember { mutableStateOf<Producte?>(null) }
     var cerca by remember { mutableStateOf("") }
     var important by remember { mutableStateOf(false) }
+    var exportant by remember { mutableStateOf<Fitxer?>(null) }
     val llista = estat.productes.filter { it.nom.contains(cerca, ignoreCase = true) }.sortedWith(compareBy({ it.categoria.ordinal }, { it.nom }))
     val pesos = listOf(3f, 1.6f, 1.1f, 1.1f, 1f, 1f)
 
@@ -85,7 +90,8 @@ fun GestioProductes(model: AppModel, estat: Estat) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Camp("Cerca", cerca, { cerca = it }, Modifier.width(320.dp), placeholder = "Nom del producte")
             Box(Modifier.weight(1f))
-            Boto("Importar CSV", { important = true }, tipus = Tipus.FANTASMA, icona = Icons.Default.FileUpload)
+            Boto("Exportar", { exportant = Fitxer("GastroBacus-productes-${avui()}.csv", TIPUS_CSV, ("\uFEFF" + Csv.exportaProductes(estat.productes)).toByteArray()) }, tipus = Tipus.FANTASMA, icona = Icons.Default.FileDownload)
+            Boto("Importar", { important = true }, tipus = Tipus.FANTASMA, icona = Icons.Default.FileUpload)
             Boto("Nou producte", { editant = Producte(nouId(), "", Categoria.CERVESA, 100) }, icona = Icons.Default.Add)
         }
         Taula(Modifier.weight(1f)) {
@@ -116,6 +122,7 @@ fun GestioProductes(model: AppModel, estat: Estat) {
     }
     editant?.let { EditorProducte(model, estat, it) { editant = null } }
     if (important) ImportarCsv(model, estat, perSocis = false) { important = false }
+    exportant?.let { f -> EnviarFitxer(model, estat, f, "${estat.config.nomSocietat}: ${f.nom}") { exportant = null } }
 }
 
 @Composable
@@ -276,6 +283,7 @@ fun GestioSocis(model: AppModel, estat: Estat) {
     var cerca by remember { mutableStateOf("") }
     var filtre by remember { mutableStateOf(0) } // 0 actius, 1 de baixa, 2 tots
     var important by remember { mutableStateOf(false) }
+    var exportant by remember { mutableStateOf<Fitxer?>(null) }
     val llista = estat.socis
         .filter { (it.nomComplet + " " + it.email).contains(cerca, ignoreCase = true) && (filtre == 2 || it.actiu == (filtre == 0)) }
         .sortedWith(compareBy(java.text.Collator.getInstance(cat.gastrobacus.consum.dades.CATALA)) { it.nom })
@@ -284,13 +292,14 @@ fun GestioSocis(model: AppModel, estat: Estat) {
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Camp("Cerca", cerca, { cerca = it }, Modifier.width(280.dp), placeholder = "Nom o correu")
+            Camp("Cerca", cerca, { cerca = it }, Modifier.width(240.dp), placeholder = "Nom o correu")
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Pindola("Actius ${estat.socis.count { it.actiu }}", filtre == 0, { filtre = 0 })
                 Pindola("De baixa ${estat.socis.count { !it.actiu }}", filtre == 1, { filtre = 1 })
                 Pindola("Tots", filtre == 2, { filtre = 2 })
             }
-            Boto("Importar CSV", { important = true }, tipus = Tipus.FANTASMA, icona = Icons.Default.FileUpload)
+            Boto("Exportar", { exportant = Fitxer("GastroBacus-socis-${avui()}.csv", TIPUS_CSV, ("\uFEFF" + Csv.exportaSocis(estat.socis)).toByteArray()) }, tipus = Tipus.FANTASMA, icona = Icons.Default.FileDownload)
+            Boto("Importar", { important = true }, tipus = Tipus.FANTASMA, icona = Icons.Default.FileUpload)
             Boto("Donar d'alta", { editant = Soci(nouId(), "", "", "", Rol.SOCI, "", "", seguentRef) }, icona = Icons.Default.Add)
         }
         Taula(Modifier.weight(1f)) {
@@ -338,6 +347,7 @@ fun GestioSocis(model: AppModel, estat: Estat) {
         )
     }
     if (important) ImportarCsv(model, estat, perSocis = true) { important = false }
+    exportant?.let { f -> EnviarFitxer(model, estat, f, "${estat.config.nomSocietat}: ${f.nom}") { exportant = null } }
 }
 
 private fun dataCurta(iso: String) = runCatching { java.time.LocalDate.parse(iso).let { "%02d/%02d/%d".format(it.dayOfMonth, it.monthValue, it.year) } }.getOrDefault(iso)

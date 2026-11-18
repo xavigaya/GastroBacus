@@ -155,6 +155,7 @@ Els productes i socis que ja existeixen (mateix nom o correu) s'actualitzen; els
 | En iniciar la sessió amb Google surt un error 10 o *DEVELOPER_ERROR* | Revisa el nom del paquet i l'empremta SHA-1 de l'apartat 1.4. |
 | Surt *Access blocked* o *accés bloquejat* | La pantalla de consentiment no està publicada o li falta algun àmbit (apartat 1.3). |
 | *No s'ha pogut iniciar la sessió amb Google* (des de la 0.3.1 surt amb el número d'error) | Error 10: paquet o SHA-1 de l'apartat 1.4. Error 16 o 12501, o s'ha tancat la pantalla: pantalla de consentiment no publicada o compte no afegit com a usuari de prova (1.3). Si acabes de crear el client OAuth, espera 10-15 minuts: Google triga a activar-lo. |
+| Error 8 o un altre error estrany de Google Play Services | Des de la 0.3.2, l'app prova sola un segon mètode: obre el selector de comptes d'Android; tria el compte de la tauleta i accepta els permisos. Si també falla, el missatge diu per què. |
 | No surt cap pantalla de Google | Comprova que Google Play Services està actualitzat i que la tauleta té un compte de Google afegit (Ajustos > Comptes). |
 | *Cal tornar a iniciar la sessió amb Google* | Gestió > Configuració > Tornar a iniciar la sessió. |
 | Els correus queden pendents | Gestió > Correus > Enviar els pendents. Mira el missatge d'error de cada correu. |

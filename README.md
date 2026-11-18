@@ -22,11 +22,11 @@ L'app és **autoallotjada**: viu només a la tauleta, amb les dades en una base 
 
 **Junta**
 - Resum del mes, productes més demanats i avisos.
-- Productes i preus, amb **importació des de CSV** de productes i inventari inicial.
+- Productes i preus, amb **importació i exportació en CSV** de productes i inventari (el fitxer exportat es pot tornar a importar).
 - **Estoc**: comptador de consum des de la darrera comanda; en arribar una comanda es pot sumar el que entra o fer un recompte, i el comptador torna a zero. **Avisos** a la tauleta i per correu quan un producte arriba a l'estoc mínim o se n'ha consumit una quantitat determinada.
 - **Comandes**: peticions dels socis i comanda al proveïdor per correu, amb la proposta del que cal reposar.
 - **Cobraments**: transferències i Bizums per comprovar, i llista de socis amb deute i des de quan.
-- **Socis**: altes i baixes amb data i historial, liquidació en donar de baixa, tornar a donar d'alta i **importació des de CSV**.
+- **Socis**: altes i baixes amb data i historial, liquidació en donar de baixa, tornar a donar d'alta i **importació i exportació en CSV**.
 - Cada reserva (o activitat) envia un avís al **responsable de reserves**.
 - **Activitats**: neteja (sense, normal o ampliada) amb preu, carregada a qui organitza; el **sopar de socis** es pot cobrar en **efectiu** (els cuiners entren el tiquet i cada assistent els paga la seva part i la cadira en mà); la **gent de fora** té un soci responsable que en paga la part, la cadira i les begudes.
 - **Resums automàtics per correu**, amb destinataris configurables: **estoc** cada setmana, **tresoreria** (consumicions, pagaments i saldos) cada 15 o 30 dies i cada **activitat** l'endemà.

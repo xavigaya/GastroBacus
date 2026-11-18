@@ -58,11 +58,16 @@ class MainActivity : ComponentActivity() {
         Google.resultatAutoritzacio(this, r.resultCode, r.data)
     }
 
+    private val pantallaAndroid = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        Google.resultatIntent(r.resultCode, r.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         Quiosc.registra(this)
         Google.llancador = { autoritzacio.launch(it) }
+        Google.llancadorIntent = { pantallaAndroid.launch(it) }
         // Amaga les barres del sistema; es poden fer aparèixer lliscant des de la vora
         WindowCompat.getInsetsController(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())

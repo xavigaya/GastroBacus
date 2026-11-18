@@ -130,6 +130,22 @@ class PagamentsTest {
         assertTrue(cat.gastrobacus.consum.google.Google.explicaError(err(13)).contains("error 13"))
     }
 
+    @Test fun lExportacioEsPotTornarAImportar() {
+        val c = DadesProva.crea()
+        val prod = Csv.llegeixProductes(Csv.exportaProductes(c.productes))
+        assertTrue(prod.errors.isEmpty())
+        assertEquals(c.productes.count { it.actiu }, prod.files.size)
+        val orig = c.productes.first { it.preuConvidat != null && it.controlaEstoc }
+        val f = prod.files.first { it.nom == orig.nom }
+        assertEquals(orig.preu, f.preu); assertEquals(orig.preuConvidat, f.preuConvidat); assertEquals(orig.estoc, f.estoc); assertEquals(orig.categoria, f.categoria)
+        val soc = Csv.llegeixSocis(Csv.exportaSocis(c.socis))
+        assertTrue(soc.errors.isEmpty())
+        assertEquals(c.socis.count { it.actiu }, soc.files.size)
+        val jordi = soc.files.first { it.nom == "Jordi" }
+        assertTrue(jordi.junta); assertNull(jordi.pin)
+        assertTrue(cat.gastrobacus.consum.google.Google.explicaErrorAlternatiu("UNREGISTERED_ON_API_CONSOLE").contains("SHA-1"))
+    }
+
     @Test fun migracioDeLaVersio2ALa3() {
         migracions.createDatabase("prova-v2", 2).apply {
             execSQL("INSERT INTO apats (id, titol, data, organitzadorId, mode, assistents, despeses, estat, tipus, franja, espai, externs, cadiraSoci, cadiraNoSoci) VALUES ('a1','Sopar','2026-10-01','s1','IGUALS','[{\"sociId\":\"s1\"}]','[]','OBERT','SOCIS','SOPAR','Tot el local','[{\"id\":\"e1\",\"nom\":\"Marc\"}]',200,300)")

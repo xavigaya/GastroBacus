@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
-class ErrorGoogle(missatge: String, val calIniciarSessio: Boolean = false) : Exception(missatge)
+class ErrorGoogle(missatge: String, val calIniciarSessio: Boolean = false, val cancelat: Boolean = false) : Exception(missatge)
 
 /**
  * Accés al compte de Google de la tauleta: Gmail (enviar) i Drive (còpies).
@@ -52,7 +52,9 @@ object Google {
         try {
             p.complete(Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data))
         } catch (e: Exception) {
-            p.completeExceptionally(ErrorGoogle(explicaError(e, codiResultat), true))
+            val codi = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+            val cancelat = codiResultat == android.app.Activity.RESULT_CANCELED && (codi == null || codi == 16 || codi == 12501)
+            p.completeExceptionally(ErrorGoogle(explicaError(e, codiResultat), true, cancelat))
         }
     }
 
@@ -64,10 +66,72 @@ object Google {
             10 -> "Google no reconeix l'app (error 10). A Google Cloud cal un client OAuth de tipus Android amb el paquet cat.gastrobacus.consum i l'empremta SHA-1 de la guia."
             16, 12501 -> if (codiResultat == android.app.Activity.RESULT_CANCELED) "S'ha tancat la pantalla de Google sense donar permís (error $codi). Si Google ha dit «Accés bloquejat», cal afegir aquest compte com a usuari de prova a la pantalla de consentiment o publicar-la." else "S'ha cancel·lat l'inici de sessió (error $codi)."
             7 -> "No hi ha connexió amb Google (error 7)."
-            8 -> "Error intern de Google Play Services (error 8). Torna-ho a provar d'aquí a una estona."
+            8 -> "Error intern de Google Play Services (error 8)$detall."
             null -> if (codiResultat == android.app.Activity.RESULT_CANCELED) "S'ha tancat la pantalla de Google sense donar permís. Si Google ha dit «Accés bloquejat», cal afegir aquest compte com a usuari de prova a la pantalla de consentiment o publicar-la." else "No s'ha pogut iniciar la sessió amb Google$detall."
             else -> "No s'ha pogut iniciar la sessió amb Google (error $codi)$detall."
         }
+    }
+
+    // ---------- Mètode alternatiu: compte de la tauleta + GoogleAuthUtil ----------
+    // Si l'API d'autorització falla (p. ex. error 8 en algunes tauletes), es tria el compte
+    // amb el selector d'Android i es demana el token directament. Queda recordat per a la còpia de les 4.
+
+    private const val TIPUS_COMPTE = "com.google"
+    private val ABAST_ALTERNATIU = "oauth2:" + ABASTS.joinToString(" ") { it.scopeUri }
+    private fun prefs(context: Context) = context.getSharedPreferences("google", Context.MODE_PRIVATE)
+    private fun compteAlternatiu(context: Context) = prefs(context).getString("compte", null)
+    fun oblida(context: Context) = prefs(context).edit().remove("compte").apply()
+
+    /** L'activitat registra aquí com obrir una pantalla d'Android i esperar-ne el resultat. */
+    var llancadorIntent: ((android.content.Intent) -> Unit)? = null
+    private var pendentIntent: CompletableDeferred<Pair<Int, android.content.Intent?>>? = null
+
+    fun resultatIntent(codi: Int, data: android.content.Intent?) {
+        pendentIntent?.complete(codi to data); pendentIntent = null
+    }
+
+    private suspend fun obre(intent: android.content.Intent): Pair<Int, android.content.Intent?> {
+        val obrir = llancadorIntent ?: throw ErrorGoogle("No es pot obrir la pantalla de Google ara mateix.", true)
+        val d = CompletableDeferred<Pair<Int, android.content.Intent?>>()
+        pendentIntent = d
+        cat.gastrobacus.consum.Quiosc.desfixa()
+        withContext(Dispatchers.Main) { obrir(intent) }
+        return d.await()
+    }
+
+    private suspend fun triaCompte(): String {
+        @Suppress("DEPRECATION")
+        val intent = android.accounts.AccountManager.newChooseAccountIntent(null, null, arrayOf(TIPUS_COMPTE), false, null, null, null, null)
+        val (codi, data) = obre(intent)
+        if (codi != android.app.Activity.RESULT_OK) throw ErrorGoogle("No s'ha triat cap compte de Google.", true)
+        return data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME) ?: throw ErrorGoogle("No s'ha triat cap compte de Google.", true)
+    }
+
+    private suspend fun tokenAlternatiu(context: Context, compte: String, interactiu: Boolean): String {
+        val account = android.accounts.Account(compte, TIPUS_COMPTE)
+        repeat(3) {
+            try {
+                return withContext(Dispatchers.IO) { com.google.android.gms.auth.GoogleAuthUtil.getToken(context, account, ABAST_ALTERNATIU) }
+            } catch (e: com.google.android.gms.auth.UserRecoverableAuthException) {
+                if (!interactiu) throw ErrorGoogle("Cal tornar a iniciar la sessió amb Google a Gestió > Configuració.", true)
+                val intent = e.intent ?: throw ErrorGoogle("Google demana permís però no ha obert cap pantalla (${e.message}).", true)
+                val (codi, _) = obre(intent)
+                if (codi != android.app.Activity.RESULT_OK) throw ErrorGoogle("No s'ha donat permís a l'app.", true)
+            } catch (e: com.google.android.gms.auth.GoogleAuthException) {
+                throw ErrorGoogle(explicaErrorAlternatiu(e.message ?: ""), true)
+            } catch (e: java.io.IOException) {
+                throw ErrorGoogle("No hi ha connexió amb Google.")
+            }
+        }
+        throw ErrorGoogle("No s'ha donat permís a l'app.", true)
+    }
+
+    internal fun explicaErrorAlternatiu(m: String): String = when {
+        m.contains("UNREGISTERED_ON_API_CONSOLE") || m.contains("INVALID_AUDIENCE") ->
+            "Google no reconeix l'app ($m). A Google Cloud cal un client OAuth de tipus Android amb el paquet cat.gastrobacus.consum i l'empremta SHA-1 de la guia, al mateix projecte on hi ha la pantalla de consentiment."
+        m.contains("ServiceDisabled") -> "El compte de Google té els serveis desactivats ($m)."
+        m.contains("BadAuthentication") || m.contains("NeedPermission") -> "Cal tornar a posar la contrasenya del compte a Ajustos > Comptes de la tauleta ($m)."
+        else -> "Google ha retornat un error: $m"
     }
 
     /**
@@ -75,11 +139,27 @@ object Google {
      * En segon pla (còpia de les 4) no pot demanar res: si cal permís, falla amb calIniciarSessio.
      */
     suspend fun token(context: Context, interactiu: Boolean): String {
+        compteAlternatiu(context)?.let { return tokenAlternatiu(context, it, interactiu) }
+        return try {
+            tokenAutoritzacio(context, interactiu)
+        } catch (e: ErrorGoogle) {
+            if (!interactiu || e.cancelat) throw e
+            // Segon intent amb el mètode alternatiu
+            val compte = triaCompte()
+            val t = try { tokenAlternatiu(context, compte, true) } catch (e2: ErrorGoogle) {
+                throw ErrorGoogle("${e.message}\nAmb el mètode alternatiu: ${e2.message}", true)
+            }
+            prefs(context).edit().putString("compte", compte).apply()
+            t
+        }
+    }
+
+    private suspend fun tokenAutoritzacio(context: Context, interactiu: Boolean): String {
         val peticio = AuthorizationRequest.builder().setRequestedScopes(ABASTS).build()
         val r = try {
             Identity.getAuthorizationClient(context).authorize(peticio).await()
         } catch (e: Exception) {
-            throw ErrorGoogle(explicaError(e))
+            throw ErrorGoogle(explicaError(e), true)
         }
         if (!r.hasResolution()) return r.accessToken ?: throw ErrorGoogle("Google no ha retornat cap permís.", true)
         if (!interactiu) throw ErrorGoogle("Cal tornar a iniciar la sessió amb Google a Gestió > Configuració.", true)

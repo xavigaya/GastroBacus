@@ -121,5 +121,10 @@ class PantallesTest {
         espera()
         regla.onNodeWithText("Registrar la comanda").assertExists()
         regla.onNodeWithText("Recompte").assertExists()
+        regla.onNodeWithText("Cancel·lar").performClick(); espera()
+        regla.onAllNodesWithText("Socis", substring = true)[0].performClick(); espera()
+        regla.onNodeWithText("Exportar").performClick(); espera()
+        regla.onNodeWithText("GastroBacus-socis-", substring = true).assertExists()
+        regla.onNodeWithText("Desar a la tauleta").assertExists()
     }
 }

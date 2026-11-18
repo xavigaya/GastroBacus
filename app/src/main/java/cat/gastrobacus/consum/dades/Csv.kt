@@ -63,6 +63,28 @@ object Csv {
         "data_alta" to "AAAA-MM-DD o DD/MM/AAAA. Buida: avui.",
     )
 
+    // ---------- Exportació (mateix format que la importació, per poder-ho tornar a importar) ----------
+
+    private fun camp(t: String) = if (t.any { it == ';' || it == '"' || it == '\n' }) "\"" + t.replace("\"", "\"\"") + "\"" else t
+    private fun diners(c: Long) = "%d,%02d".format(c / 100, c % 100)
+    private fun fila(v: List<String>) = v.joinToString(";") { camp(it) }
+
+    /** Productes actius, amb l'estoc actual. */
+    fun exportaProductes(productes: List<Producte>): String =
+        (listOf(fila(COLUMNES_PRODUCTES.map { it.first })) + productes.filter { it.actiu }.sortedWith(compareBy({ it.categoria.ordinal }, { it.nom })).map { p ->
+            fila(listOf(
+                p.nom, p.categoria.nom, diners(p.preu), p.preuConvidat?.let { diners(it) } ?: "",
+                if (p.controlaEstoc) p.estoc.toString() else "", if (p.estocMinim > 0) p.estocMinim.toString() else "",
+                if (p.avisConsum > 0) p.avisConsum.toString() else "", if (p.favorit) "si" else "no",
+            ))
+        }).joinToString("\r\n", postfix = "\r\n")
+
+    /** Socis actius. El PIN no s'exporta (només se'n guarda una empremta); en tornar a importar es conserva. */
+    fun exportaSocis(socis: List<Soci>): String =
+        (listOf(fila(COLUMNES_SOCIS.map { it.first })) + socis.filter { it.actiu }.sortedWith(compareBy({ it.nom }, { it.cognoms })).map { s ->
+            fila(listOf(s.nom, s.cognoms, s.email, s.refBanc, "", if (s.esJunta) "si" else "no", s.periodes.lastOrNull()?.alta ?: ""))
+        }).joinToString("\r\n", postfix = "\r\n")
+
     /** Divideix una línia CSV respectant les cometes. */
     fun divideix(linia: String, sep: Char): List<String> {
         val r = mutableListOf<String>()

@@ -51,7 +51,7 @@ class Serveis private constructor(context: Context) {
         return correu
     }
 
-    suspend fun tancaSessioGoogle() = repo.actualitzaConfig { it.copy(compteGoogle = null) }
+    suspend fun tancaSessioGoogle() { Google.oblida(context); repo.actualitzaConfig { it.copy(compteGoogle = null) } }
 
     // ---------- Correus ----------
 

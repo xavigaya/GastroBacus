@@ -296,6 +296,11 @@ private fun Pas(n: Int, titol: String, fet: Boolean, actual: Boolean, modifier: 
 @Composable
 fun EnviarFitxer(model: AppModel, estat: Estat, f: Fitxer, assumpte: String, onTanca: () -> Unit) {
     val context = LocalContext.current
+    val desar = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument(f.tipus)) { uri ->
+        if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)!!.use { it.write(f.dades) } }
+            .onSuccess { model.avisa("Desat a la tauleta: ${f.nom}"); onTanca() }
+            .onFailure { model.avisa("No s'ha pogut desar: ${it.message}") }
+    }
     var per by remember { mutableStateOf(estat.config.correuTresoreria.ifBlank { estat.config.compteGoogle ?: "" }) }
     AlertDialog(
         onDismissRequest = onTanca,
@@ -313,6 +318,7 @@ fun EnviarFitxer(model: AppModel, estat: Estat, f: Fitxer, assumpte: String, onT
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Boto("Desar a la tauleta", { cat.gastrobacus.consum.Quiosc.desfixa(); desar.launch(f.nom) }, tipus = Tipus.FANTASMA)
                 Boto("Compartir", { compartir(context, f); onTanca() }, tipus = Tipus.FANTASMA, icona = Icons.Default.Share)
                 Boto("Cancel·lar", onTanca, tipus = Tipus.FANTASMA)
             }
