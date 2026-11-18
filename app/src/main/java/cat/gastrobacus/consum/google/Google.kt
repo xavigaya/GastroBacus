@@ -46,13 +46,27 @@ object Google {
     var llancador: ((IntentSenderRequest) -> Unit)? = null
     private var pendent: CompletableDeferred<AuthorizationResult>? = null
 
-    fun resultatAutoritzacio(context: Context, data: android.content.Intent?) {
+    fun resultatAutoritzacio(context: Context, codiResultat: Int, data: android.content.Intent?) {
         val p = pendent ?: return
         pendent = null
         try {
             p.complete(Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data))
         } catch (e: Exception) {
-            p.completeExceptionally(ErrorGoogle("No s'ha pogut iniciar la sessió amb Google.", true))
+            p.completeExceptionally(ErrorGoogle(explicaError(e, codiResultat), true))
+        }
+    }
+
+    /** Tradueix l'error de Google a un missatge que ajudi a saber què falla a la configuració. */
+    internal fun explicaError(e: Exception, codiResultat: Int = android.app.Activity.RESULT_OK): String {
+        val codi = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+        val detall = e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
+        return when (codi) {
+            10 -> "Google no reconeix l'app (error 10). A Google Cloud cal un client OAuth de tipus Android amb el paquet cat.gastrobacus.consum i l'empremta SHA-1 de la guia."
+            16, 12501 -> if (codiResultat == android.app.Activity.RESULT_CANCELED) "S'ha tancat la pantalla de Google sense donar permís (error $codi). Si Google ha dit «Accés bloquejat», cal afegir aquest compte com a usuari de prova a la pantalla de consentiment o publicar-la." else "S'ha cancel·lat l'inici de sessió (error $codi)."
+            7 -> "No hi ha connexió amb Google (error 7)."
+            8 -> "Error intern de Google Play Services (error 8). Torna-ho a provar d'aquí a una estona."
+            null -> if (codiResultat == android.app.Activity.RESULT_CANCELED) "S'ha tancat la pantalla de Google sense donar permís. Si Google ha dit «Accés bloquejat», cal afegir aquest compte com a usuari de prova a la pantalla de consentiment o publicar-la." else "No s'ha pogut iniciar la sessió amb Google$detall."
+            else -> "No s'ha pogut iniciar la sessió amb Google (error $codi)$detall."
         }
     }
 
@@ -65,7 +79,7 @@ object Google {
         val r = try {
             Identity.getAuthorizationClient(context).authorize(peticio).await()
         } catch (e: Exception) {
-            throw ErrorGoogle("No es pot connectar amb Google: ${e.message ?: "error desconegut"}")
+            throw ErrorGoogle(explicaError(e))
         }
         if (!r.hasResolution()) return r.accessToken ?: throw ErrorGoogle("Google no ha retornat cap permís.", true)
         if (!interactiu) throw ErrorGoogle("Cal tornar a iniciar la sessió amb Google a Gestió > Configuració.", true)

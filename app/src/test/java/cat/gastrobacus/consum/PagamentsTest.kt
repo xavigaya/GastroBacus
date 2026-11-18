@@ -123,6 +123,13 @@ class PagamentsTest {
         assertTrue(c.socis.any { estat.deuteAntic(it) })
     }
 
+    @Test fun elsErrorsDeGoogleDiuenQueFalla() {
+        fun err(codi: Int) = com.google.android.gms.common.api.ApiException(com.google.android.gms.common.api.Status(codi))
+        assertTrue(cat.gastrobacus.consum.google.Google.explicaError(err(10)).contains("SHA-1"))
+        assertTrue(cat.gastrobacus.consum.google.Google.explicaError(err(16), android.app.Activity.RESULT_CANCELED).contains("usuari de prova"))
+        assertTrue(cat.gastrobacus.consum.google.Google.explicaError(err(13)).contains("error 13"))
+    }
+
     @Test fun migracioDeLaVersio2ALa3() {
         migracions.createDatabase("prova-v2", 2).apply {
             execSQL("INSERT INTO apats (id, titol, data, organitzadorId, mode, assistents, despeses, estat, tipus, franja, espai, externs, cadiraSoci, cadiraNoSoci) VALUES ('a1','Sopar','2026-10-01','s1','IGUALS','[{\"sociId\":\"s1\"}]','[]','OBERT','SOCIS','SOPAR','Tot el local','[{\"id\":\"e1\",\"nom\":\"Marc\"}]',200,300)")

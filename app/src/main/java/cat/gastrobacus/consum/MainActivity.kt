@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
     private val model: AppModel by viewModels()
 
     private val autoritzacio = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
-        Google.resultatAutoritzacio(this, r.data)
+        Google.resultatAutoritzacio(this, r.resultCode, r.data)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
 fun App(model: AppModel) {
     val estat by model.estat.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
-    LaunchedEffect(Unit) { model.missatges.collect { avisos.showSnackbar(it) } }
+    LaunchedEffect(Unit) { model.missatges.collect { avisos.showSnackbar(it, withDismissAction = it.length > 60, duration = if (it.length > 60) androidx.compose.material3.SnackbarDuration.Indefinite else androidx.compose.material3.SnackbarDuration.Short) } }
     // Fixa la pantalla tan bon punt hi ha dades i la configuració ho demana
     LaunchedEffect(estat.carregat, estat.config.fixarPantalla, estat.esBuida, model.pantallaDesfixada) {
         if (estat.carregat && estat.config.fixarPantalla && !estat.esBuida && !model.pantallaDesfixada) Quiosc.fixa()
@@ -96,7 +96,7 @@ fun App(model: AppModel) {
 
     Scaffold(
         snackbarHost = {
-            SnackbarHost(avisos) { d -> Snackbar(containerColor = C.roure, contentColor = C.pedra) { Text(d.visuals.message, style = androidx.compose.material3.MaterialTheme.typography.titleMedium) } }
+            SnackbarHost(avisos) { d -> Snackbar(d, containerColor = C.roure, contentColor = C.pedra, dismissActionContentColor = C.pedra) }
         },
         containerColor = C.pedra,
     ) { pad ->
