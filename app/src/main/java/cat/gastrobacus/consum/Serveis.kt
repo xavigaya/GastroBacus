@@ -92,6 +92,61 @@ class Serveis private constructor(context: Context) {
         Google.enviaCorreu(Google.token(context, true), compte, cfg.nomSocietat, desti, assumpte, cos, Google.Adjunt(f.nom, f.tipus, f.dades))
     }
 
+    // ---------- Resums automàtics ----------
+
+    enum class TipusResum { ESTOC, TRESORERIA, ACTIVITATS }
+
+    /**
+     * Envia els resums que toquen (o el que es força). Es crida cada dia a les 4 després de la còpia.
+     * Retorna què s'ha enviat.
+     */
+    suspend fun enviaResums(interactiu: Boolean, forcar: TipusResum? = null): List<String> {
+        val cfg = repo.config()
+        val compte = cfg.compteGoogle ?: throw ErrorGoogle("Primer cal iniciar la sessió amb Google a Gestió > Configuració.", true)
+        val estat = repo.estat.value
+        val ara = System.currentTimeMillis()
+        val avui = java.time.LocalDate.now(ZONA)
+        val iniciDia = avui.atStartOfDay(ZONA).toInstant().toEpochMilli()
+        val enviats = mutableListOf<String>()
+        var token: String? = null
+        suspend fun envia(per: String, r: cat.gastrobacus.consum.exportar.Resum) {
+            val desti = if (cfg.modeProves) cfg.correuProves else per
+            if (desti.isBlank()) return
+            val t = token ?: Google.token(context, interactiu).also { token = it }
+            Google.enviaCorreu(t, compte, cfg.nomSocietat, desti, "${cfg.nomSocietat}: ${r.assumpte}", r.cos, r.adjunt?.let { Google.Adjunt(it.nom, it.tipus, it.dades) })
+            enviats += r.assumpte
+        }
+
+        // Estoc: un cop per setmana, el dia triat
+        val tocaEstoc = forcar == TipusResum.ESTOC ||
+            (forcar == null && avui.dayOfWeek.value == cfg.resumEstocDia && (cfg.darrerResumEstoc ?: 0) < iniciDia)
+        if (tocaEstoc && cfg.resumEstocPer.isNotBlank()) {
+            envia(cfg.resumEstocPer, cat.gastrobacus.consum.exportar.resumEstoc(estat, ara))
+            repo.actualitzaConfig { it.copy(darrerResumEstoc = ara) }
+        }
+        // Tresoreria: cada 15 o 30 dies
+        val periode = cfg.resumTresoreriaDies * 86_400_000L
+        val tocaTresoreria = forcar == TipusResum.TRESORERIA ||
+            (forcar == null && (cfg.darrerResumTresoreria == null || ara - cfg.darrerResumTresoreria >= periode - 3 * 3_600_000L))
+        if (tocaTresoreria && cfg.resumTresoreriaPer.isNotBlank()) {
+            envia(cfg.resumTresoreriaPer, cat.gastrobacus.consum.exportar.resumTresoreria(estat, cfg.darrerResumTresoreria ?: (ara - periode), ara))
+            repo.actualitzaConfig { it.copy(darrerResumTresoreria = ara) }
+        }
+        // Activitats: l'endemà (es recuperen les de la darrera setmana que no s'hagin enviat)
+        if (forcar == null || forcar == TipusResum.ACTIVITATS) {
+            val desDe = avui.minusDays(7).toString()
+            estat.apats.filter { it.data < avui.toString() && it.data >= desDe && !it.resumEnviat }.forEach { a ->
+                val per = listOfNotNull(
+                    cfg.resumActivitatsPer.takeIf { it.isNotBlank() },
+                    estat.soci(a.organitzadorId)?.email?.takeIf { cfg.resumActivitatsOrganitzador && it.isNotBlank() },
+                ).joinToString(", ")
+                if (per.isNotBlank()) envia(per, cat.gastrobacus.consum.exportar.resumActivitat(estat, a))
+                repo.marcaResumEnviat(a.id)
+            }
+        }
+        return enviats
+    }
+
     // ---------- Còpies de seguretat ----------
 
     suspend fun ferCopia(interactiu: Boolean): String {
@@ -123,8 +178,10 @@ class TreballCopia(context: Context, params: WorkerParameters) : CoroutineWorker
         val s = Serveis.de(applicationContext)
         if (s.repo.config().compteGoogle == null) return Result.success()
         return try {
-            s.ferCopia(interactiu = false)
+            val copia = runCatching { s.ferCopia(interactiu = false) }
+            runCatching { s.enviaResums(interactiu = false) }
             runCatching { s.enviaPendents(interactiu = false) }
+            copia.getOrThrow()
             Result.success()
         } catch (e: ErrorGoogle) {
             if (e.calIniciarSessio) Result.failure() else Result.retry()

@@ -158,7 +158,12 @@ fun QuiEts(model: AppModel, estat: Estat) {
     val lletres = socis.map { it.nom.first().uppercaseChar() }.distinct()
     val llista = if (lletra == null) socis else socis.filter { it.nom.first().uppercaseChar() == lletra }
     var ara by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(60_000); ara = System.currentTimeMillis() } }
+    LaunchedEffect(Unit) {
+        while (true) {
+            runCatching { model.repo.activaConvidatsActivitats() }
+            kotlinx.coroutines.delay(60_000); ara = System.currentTimeMillis()
+        }
+    }
     val convidats = estat.convidatsActius(ara)
 
     Column(Modifier.fillMaxSize().background(C.pedra)) {
@@ -178,7 +183,7 @@ fun QuiEts(model: AppModel, estat: Estat) {
                     items(convidats, key = { it.id }) { c -> FitxaConvidat(c.nom, estat.soci(c.sociId)?.nom ?: "") { model.entraConvidat(c.id) } }
                     item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { Text("Socis", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp)) }
                 }
-                items(llista, key = { it.id }) { s -> FitxaSoci(s) { model.triaSoci(s.id) } }
+                items(llista, key = { it.id }) { s -> FitxaSoci(s, estat.deuteAntic(s, ara)) { model.triaSoci(s.id) } }
             }
         }
     }
@@ -210,16 +215,16 @@ private fun FitxaConvidat(nom: String, deQui: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FitxaSoci(s: Soci, onClick: () -> Unit) {
+private fun FitxaSoci(s: Soci, deute: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp)).background(C.superficie)
-            .border(2.dp, C.vora, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp)).background(if (deute) C.errorSuau else C.superficie)
+            .border(2.dp, if (deute) C.error else C.vora, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Avatar(s.inicials, 50.dp)
         Column {
             Text(s.nom, style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp), maxLines = 1)
-            Suau(s.cognoms, mida = 14.sp)
+            if (deute) Text("Pagament pendent", style = MaterialTheme.typography.labelMedium, color = C.error) else Suau(s.cognoms, mida = 14.sp)
         }
     }
 }

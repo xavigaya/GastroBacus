@@ -47,6 +47,8 @@ import cat.gastrobacus.consum.ui.Cap
 import cat.gastrobacus.consum.ui.Casella
 import cat.gastrobacus.consum.ui.Cel
 import cat.gastrobacus.consum.ui.Confirmacio
+import cat.gastrobacus.consum.ui.Desplegable
+import cat.gastrobacus.consum.ui.Interruptor
 import cat.gastrobacus.consum.ui.Etiqueta
 import cat.gastrobacus.consum.ui.FilaTaula
 import cat.gastrobacus.consum.ui.Subtitol
@@ -203,6 +205,21 @@ fun Configuracio(model: AppModel, estat: Estat) {
             }
         }
     }
+    var rebut by remember(cfg) { mutableStateOf(cfg.rebutBancari) }
+    var iban by remember(cfg) { mutableStateOf(cfg.compteTransferencia) }
+    var diesDeute by remember(cfg) { mutableStateOf(cfg.diesAvisDeute.toString()) }
+    var soparEfectiu by remember(cfg) { mutableStateOf(cfg.soparSocisEfectiu) }
+    val netejes = remember(cfg) {
+        androidx.compose.runtime.mutableStateMapOf<cat.gastrobacus.consum.dades.Neteja, String>().apply {
+            cat.gastrobacus.consum.dades.Neteja.entries.forEach { n -> put(n, cat.gastrobacus.consum.dades.euros(cfg.preusNeteja[n] ?: 0).removeSuffix(" €")) }
+        }
+    }
+    var resEstocPer by remember(cfg) { mutableStateOf(cfg.resumEstocPer) }
+    var resEstocDia by remember(cfg) { mutableStateOf(cfg.resumEstocDia) }
+    var resTresPer by remember(cfg) { mutableStateOf(cfg.resumTresoreriaPer) }
+    var resTresDies by remember(cfg) { mutableStateOf(cfg.resumTresoreriaDies) }
+    var resActPer by remember(cfg) { mutableStateOf(cfg.resumActivitatsPer) }
+    var resActOrg by remember(cfg) { mutableStateOf(cfg.resumActivitatsOrganitzador) }
     var confirmaDadesProva by remember { mutableStateOf(false) }
     var refresc by remember { mutableIntStateOf(0) }
     val fixada = remember(refresc) { Quiosc.estaFixada(context) }
@@ -254,6 +271,47 @@ fun Configuracio(model: AppModel, estat: Estat) {
         }
 
         Bloc(Modifier.fillMaxWidth()) {
+            Subtitol("Pagaments")
+            Camp("Compte de la societat per a les transferències (IBAN)", iban, { iban = it }, ajuda = "Surt quan el soci prem «Pagar».")
+            Camp("Avisar quan el deute té més de (dies)", diesDeute, { if (it.length <= 3 && it.all(Char::isDigit)) diesDeute = it }, teclat = KeyboardType.Number, ajuda = "El nom del soci surt en vermell a la pantalla d'inici.")
+            Casella("Cobrar també amb rebut bancari a final de mes", rebut, { rebut = it })
+            Suau(if (rebut) "Al tancament es genera el fitxer per al banc i els mesos tancats es donen per cobrats." else "Només transferència (botó «Pagar») i Bizum.", mida = 14.sp)
+        }
+
+        Bloc(Modifier.fillMaxWidth()) {
+            Subtitol("Neteja i sopar de socis")
+            Text("Preu de la neteja (es carrega a qui organitza l'activitat)", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                cat.gastrobacus.consum.dades.Neteja.entries.filter { it != cat.gastrobacus.consum.dades.Neteja.SENSE }.forEach { n ->
+                    Camp("${n.nom} (€)", netejes[n] ?: "", { netejes[n] = it }, Modifier.weight(1f), teclat = KeyboardType.Decimal)
+                }
+            }
+            Casella("Al sopar de socis, el menjar i la cadira es paguen en efectiu", soparEfectiu, { soparEfectiu = it })
+            Suau("Els cuiners entren el tiquet i cada assistent els paga la seva part en mà. Es pot canviar en cada activitat.", mida = 14.sp)
+        }
+
+        Bloc(Modifier.fillMaxWidth()) {
+            Subtitol("Resums automàtics per correu")
+            Suau("S'envien de matinada, amb la còpia de seguretat. Pots posar més d'un correu separat per comes.", mida = 14.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
+                Camp("Estoc, cada setmana, a", resEstocPer, { resEstocPer = it }, Modifier.weight(2f), teclat = KeyboardType.Email)
+                Desplegable((1..7).toList(), resEstocDia, { java.time.DayOfWeek.of(it).getDisplayName(java.time.format.TextStyle.FULL, cat.gastrobacus.consum.dades.CATALA) }, { resEstocDia = it }, Modifier.weight(1f), "El")
+                Boto("Enviar ara", { model.accioAmb({ model.serveis.enviaResums(true, cat.gastrobacus.consum.Serveis.TipusResum.ESTOC) }) { model.avisa(if (it.isEmpty()) "No hi ha destinataris" else "Resum d'estoc enviat") } }, tipus = Tipus.FANTASMA, petit = true, enabled = cfg.compteGoogle != null && cfg.resumEstocPer.isNotBlank())
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
+                Camp("Tresoreria (consumicions i pagaments) a", resTresPer, { resTresPer = it }, Modifier.weight(2f), teclat = KeyboardType.Email)
+                Column(Modifier.weight(1f)) { Text("Cada", style = MaterialTheme.typography.labelMedium); Interruptor(listOf("15 dies", "30 dies"), if (resTresDies >= 30) 1 else 0, { resTresDies = if (it == 1) 30 else 15 }) }
+                Boto("Enviar ara", { model.accioAmb({ model.serveis.enviaResums(true, cat.gastrobacus.consum.Serveis.TipusResum.TRESORERIA) }) { model.avisa(if (it.isEmpty()) "No hi ha destinataris" else "Resum de tresoreria enviat") } }, tipus = Tipus.FANTASMA, petit = true, enabled = cfg.compteGoogle != null && cfg.resumTresoreriaPer.isNotBlank())
+            }
+            Camp("Activitats, l'endemà, a", resActPer, { resActPer = it }, teclat = KeyboardType.Email)
+            Casella("Enviar-lo també a qui organitza l'activitat", resActOrg, { resActOrg = it })
+            Suau(
+                "Darrer resum d'estoc: ${cfg.darrerResumEstoc?.let { cat.gastrobacus.consum.dades.dataHora(it) } ?: "cap"}. Darrer de tresoreria: ${cfg.darrerResumTresoreria?.let { cat.gastrobacus.consum.dades.dataHora(it) } ?: "cap"}.",
+                mida = 14.sp,
+            )
+        }
+
+        Bloc(Modifier.fillMaxWidth()) {
             Subtitol("Bizum i avisos")
             Camp("Telèfon per als Bizums", telefonBizum, { telefonBizum = it }, teclat = KeyboardType.Phone, ajuda = "Si és buit, no surt l'opció de pagar per Bizum.")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -272,6 +330,11 @@ fun Configuracio(model: AppModel, estat: Estat) {
                             telefonBizum = telefonBizum.trim(), correuReserves = correuReserves.trim(), correuAvisos = correuAvisos.trim(),
                             correuProveidor = correuProveidor.trim(), horaFiDia = (horaFi.toIntOrNull() ?: it.horaFiDia).coerceIn(0, 23),
                             favoritsPerSoci = (nFavorits.toIntOrNull() ?: it.favoritsPerSoci).coerceIn(0, 30),
+                            rebutBancari = rebut, compteTransferencia = iban.trim(), diesAvisDeute = (diesDeute.toIntOrNull() ?: it.diesAvisDeute).coerceIn(1, 365),
+                            soparSocisEfectiu = soparEfectiu,
+                            preusNeteja = cat.gastrobacus.consum.dades.Neteja.entries.associateWith { n -> if (n == cat.gastrobacus.consum.dades.Neteja.SENSE) 0L else cat.gastrobacus.consum.dades.llegirEuros(netejes[n] ?: "") ?: 0L },
+                            resumEstocPer = resEstocPer.trim(), resumEstocDia = resEstocDia, resumTresoreriaPer = resTresPer.trim(), resumTresoreriaDies = resTresDies,
+                            resumActivitatsPer = resActPer.trim(), resumActivitatsOrganitzador = resActOrg,
                             preusCadira = cat.gastrobacus.consum.dades.TipusActivitat.entries.associateWith { t ->
                                 cat.gastrobacus.consum.dades.PreuCadira(
                                     cat.gastrobacus.consum.dades.llegirEuros(cadires["${t.name}-s"] ?: "") ?: 0,

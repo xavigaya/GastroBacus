@@ -107,11 +107,23 @@ data class Reposicio(
 )
 
 @Serializable
-data class Assistent(val sociId: String, val convidats: Int = 0, val parts: Double = 1.0)
+data class Assistent(
+    val sociId: String,
+    val convidats: Int = 0,
+    val parts: Double = 1.0,
+    /** Activitats que es cobren en efectiu (sopar de socis): ja ha pagat la seva part. */
+    val pagatEfectiu: Boolean = false,
+)
 
-/** Persona de fora en una activitat oberta. Paga a part (Bizum o efectiu). */
+/** Persona de fora en una activitat oberta. Tot el que fa va al compte del soci responsable. */
 @Serializable
-data class Extern(val id: String, val nom: String, val parts: Double = 1.0, val pagat: Boolean = false)
+data class Extern(
+    val id: String,
+    val nom: String,
+    val parts: Double = 1.0,
+    val pagat: Boolean = false,
+    val responsableId: String = "",
+)
 
 @Serializable
 data class DespesaApat(val id: String, val pagadorId: String, val concepte: String, val import: Long)
@@ -126,6 +138,8 @@ enum class TipusActivitat(val nom: String, val descripcio: String) {
 }
 
 const val TOT_EL_LOCAL = "Tot el local"
+
+enum class Neteja(val nom: String) { SENSE("Sense neteja"), NORMAL("Neteja"), AMPLIADA("Neteja ampliada") }
 
 @Serializable
 @Entity(tableName = "apats")
@@ -146,6 +160,14 @@ data class Apat(
     /** Preus de la cadira en el moment de crear l'activitat (la junta els pot canviar). */
     @ColumnInfo(defaultValue = "0") val cadiraSoci: Long = 0,
     @ColumnInfo(defaultValue = "0") val cadiraNoSoci: Long = 0,
+    // Versió 3
+    @ColumnInfo(defaultValue = "SENSE") val neteja: Neteja = Neteja.SENSE,
+    /** Preu de la neteja en el moment de triar-la; es carrega a qui organitza. */
+    @ColumnInfo(defaultValue = "0") val preuNeteja: Long = 0,
+    /** El menjar i la cadira es paguen en efectiu a l'activitat (sopar de socis), no van al compte. */
+    @ColumnInfo(defaultValue = "0") val cobramentEfectiu: Boolean = false,
+    /** Ja s'ha enviat el resum de l'endemà. */
+    @ColumnInfo(defaultValue = "0") val resumEnviat: Boolean = false,
 )
 
 enum class Franja(val nom: String) { DINAR("Dinar"), SOPAR("Sopar"), TOT_EL_DIA("Tot el dia") }
@@ -223,6 +245,23 @@ data class Bizum(
     val externId: String? = null,
 )
 
+enum class EstatTransferencia { PENDENT, CONFIRMADA, REBUTJADA }
+
+/** Pagament per transferència que declara el soci. Queda pendent fins que tresoreria el confirma. */
+@Serializable
+@Entity(tableName = "transferencies", indices = [Index("sociId")])
+data class Transferencia(
+    @PrimaryKey val id: String,
+    val sociId: String,
+    val import: Long,
+    val data: String, // dia de la transferència, AAAA-MM-DD
+    val concepte: String,
+    val ts: Long,
+    val estat: EstatTransferencia = EstatTransferencia.PENDENT,
+    val confirmatPer: String? = null,
+    val confirmatTs: Long? = null,
+)
+
 enum class TipusAvis { ESTOC_MINIM, CONSUM }
 
 @Serializable
@@ -279,6 +318,23 @@ data class Config(
     val correuProveidor: String = "",
     val horaFiDia: Int = 7, // els convidats desapareixen a aquesta hora
     val favoritsPerSoci: Int = 8,
+    // Versió 3: pagaments
+    /** Si és fals, no es genera el fitxer de rebuts per al banc: es paga per transferència o Bizum. */
+    val rebutBancari: Boolean = false,
+    val compteTransferencia: String = "", // IBAN de la societat
+    val diesAvisDeute: Int = 45,
+    // Neteja i sopar de socis
+    val preusNeteja: Map<Neteja, Long> = mapOf(Neteja.SENSE to 0, Neteja.NORMAL to 2000, Neteja.AMPLIADA to 4000),
+    val soparSocisEfectiu: Boolean = true,
+    // Resums automàtics (correus separats per comes)
+    val resumEstocPer: String = "",
+    val resumEstocDia: Int = 1, // 1 = dilluns … 7 = diumenge
+    val resumTresoreriaPer: String = "",
+    val resumTresoreriaDies: Int = 15,
+    val resumActivitatsPer: String = "",
+    val resumActivitatsOrganitzador: Boolean = true,
+    val darrerResumEstoc: Long? = null,
+    val darrerResumTresoreria: Long? = null,
 )
 
 @Entity(tableName = "config")

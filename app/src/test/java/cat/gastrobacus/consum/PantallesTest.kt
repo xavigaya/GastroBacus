@@ -87,6 +87,22 @@ class PantallesTest {
         captura("08-reserves")
     }
 
+    @Test fun recorregutPagament() {
+        toca("Ramon")
+        DadesProva.PIN.forEach { toca(it.toString()) }
+        captura("20-avis-deute")
+        toca("El meu compte")
+        captura("21-el-meu-compte")
+        regla.onAllNodesWithText("Pagar")[0].performClick(); espera()
+        regla.onNodeWithText("Registrar el pagament").assertExists()
+        regla.onNodeWithText("ES00 1234 5678 9012 3456 7890").assertExists()
+        toca("Registrar el pagament")
+        captura("22-pagament-registrat")
+        toca("Àpats")
+        toca("Calçotada de la colla")
+        captura("23-sopar-socis-efectiu")
+    }
+
     @Test fun recorregutConvidat() {
         toca("Marc")
         captura("09-convidat")
@@ -96,7 +112,7 @@ class PantallesTest {
         entraCom("Jordi")
         toca("Gestió")
         captura("10-gestio-resum")
-        listOf("Estoc", "Comandes", "Bizums", "Socis", "Configuració").forEachIndexed { i, s ->
+        listOf("Estoc", "Comandes", "Cobraments", "Socis", "Configuració").forEachIndexed { i, s ->
             regla.onAllNodesWithText(s, substring = true)[0].performClick()
             captura("%02d-gestio-%s".format(11 + i, s.lowercase().replace("ó", "o")))
         }

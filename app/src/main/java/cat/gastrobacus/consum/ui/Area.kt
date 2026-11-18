@@ -48,7 +48,7 @@ import kotlinx.coroutines.delay
 
 enum class Seccio(val titol: String, val icona: ImageVector) {
     APUNTAR("Apuntar", Icons.Default.LocalBar),
-    CONSUM("El meu consum", Icons.AutoMirrored.Filled.ListAlt),
+    CONSUM("El meu compte", Icons.AutoMirrored.Filled.ListAlt),
     RESERVES("Reserves", Icons.Default.CalendarMonth),
     APATS("Àpats", Icons.Default.SoupKitchen),
     PIN("El meu PIN", Icons.Default.Dialpad),
@@ -100,7 +100,7 @@ fun AreaSoci(model: AppModel, estat: Estat, soci: Soci) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (seccio) {
                     Seccio.APUNTAR -> Apuntar(model, estat, soci) { apuntat = it }
-                    Seccio.CONSUM -> ElMeuConsum(estat, soci)
+                    Seccio.CONSUM -> ElMeuConsum(model, estat, soci)
                     Seccio.RESERVES -> Reserves(model, estat, soci)
                     Seccio.APATS -> Apats(model, estat, soci)
                     Seccio.PIN -> CanviPin(model, soci)

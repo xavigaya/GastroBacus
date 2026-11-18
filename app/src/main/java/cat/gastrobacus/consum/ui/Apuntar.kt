@@ -83,6 +83,7 @@ fun Apuntar(model: AppModel, estat: Estat, soci: Soci, convidat: ConvidatDia? = 
     var demanaConvidat by remember { mutableStateOf(false) }
     var bizum by remember { mutableStateOf(false) }
     var peticio by remember { mutableStateOf(false) }
+    var pagant by remember { mutableStateOf(false) }
     var ara by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(15_000); ara = System.currentTimeMillis() } }
 
@@ -116,6 +117,12 @@ fun Apuntar(model: AppModel, estat: Estat, soci: Soci, convidat: ConvidatDia? = 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Titol("Què prens, ${convidat?.nom ?: soci.nom}?", Modifier.weight(1f))
                 TextButton({ peticio = true }) { Text("Falta alguna cosa?", style = MaterialTheme.typography.labelLarge, color = C.most) }
+            }
+            if (convidat == null && estat.deuteAntic(soci, ara)) {
+                val c = estat.compte(soci)
+                Avis("Tens ${euros(c.perPagar)} pendents de pagar des de fa ${c.diesDeute(ara)} dies.", ToAvis.ERROR) {
+                    Boto("Pagar", { pagant = true }, petit = true)
+                }
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (favorits.isNotEmpty()) Pindola("★ Favorits", filtre == FAVORITS, { filtre = FAVORITS })
@@ -264,6 +271,7 @@ fun Apuntar(model: AppModel, estat: Estat, soci: Soci, convidat: ConvidatDia? = 
     }
 
     if (peticio) DialegPeticio(model, estat, soci) { peticio = false }
+    if (pagant) DialegPagar(model, estat, soci) { pagant = false }
 }
 
 @Composable

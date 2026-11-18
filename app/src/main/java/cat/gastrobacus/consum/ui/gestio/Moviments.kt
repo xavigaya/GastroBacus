@@ -213,15 +213,19 @@ fun Tancament(model: AppModel, estat: Estat) {
                     tipus = if (estatMes == EstatMes.INFORMAT) Tipus.FANTASMA else Tipus.PRINCIPAL, enabled = informes.isNotEmpty() && !model.ocupat,
                 )
             }
-            Pas(3, "Tancar i passar al banc", fet = estatMes == EstatMes.TANCAT, actual = estatMes == EstatMes.INFORMAT && System.currentTimeMillis() >= limit, Modifier.weight(1f)) {
-                Text("Un cop tancat, el mes ja no es pot modificar i es genera el fitxer de rebuts per al banc.", style = MaterialTheme.typography.bodyMedium)
+            Pas(3, if (estat.config.rebutBancari) "Tancar i passar al banc" else "Tancar el mes", fet = estatMes == EstatMes.TANCAT, actual = estatMes == EstatMes.INFORMAT && System.currentTimeMillis() >= limit, Modifier.weight(1f)) {
+                Text(
+                    if (estat.config.rebutBancari) "Un cop tancat, el mes ja no es pot modificar i es genera el fitxer de rebuts per al banc."
+                    else "Un cop tancat, el mes ja no es pot modificar. Els socis paguen per transferència des del seu compte.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 if (estatMes == EstatMes.TANCAT) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Boto("Fitxer per al banc", { enviantFitxer = csvRemesa(estat, mes) }, petit = true, icona = Icons.Default.Email)
+                        if (estat.config.rebutBancari) Boto("Fitxer per al banc", { enviantFitxer = csvRemesa(estat, mes) }, petit = true, icona = Icons.Default.Email)
                         Boto("Reobrir el mes", { model.accio("${nomMes(mes)} reobert") { model.repo.reobrirMes(mes) } }, tipus = Tipus.FANTASMA, petit = true)
                     }
                     if (aFavor.isNotEmpty()) Avis("${aFavor.joinToString { "${it.soci.nomComplet} (${euros(-it.total)})" }} ${if (aFavor.size > 1) "tenen" else "té"} saldo a favor per despeses avançades. No surt al fitxer del banc: cal tornar-li els diners a part.")
-                    Suau("De moment és un CSV amb la referència i l'import de cada soci. El format definitiu de la remesa es farà quan sapiguem què demana el banc.", mida = 13.sp)
+                    if (estat.config.rebutBancari) Suau("De moment és un CSV amb la referència i l'import de cada soci. El format definitiu de la remesa es farà quan sapiguem què demana el banc.", mida = 13.sp)
                 } else Boto("Tancar el mes", { confirmaTancar = true }, tipus = Tipus.VERD, enabled = estatMes == EstatMes.INFORMAT)
             }
         }

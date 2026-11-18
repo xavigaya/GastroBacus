@@ -130,6 +130,9 @@ Entra amb un membre de la junta a **Gestió** > **Configuració** i omple:
 - **Responsable de reserves**: rep un correu a cada reserva o anul·lació.
 - **Avisos d'estoc i peticions**: rep els avisos d'estoc mínim, de quantitat consumida i les peticions dels socis.
 - **Correu del proveïdor**: per defecte a les comandes.
+- **Pagaments**: l'IBAN de la societat (surt quan el soci prem «Pagar») i a partir de quants dies de deute el nom surt en vermell. El rebut bancari està desactivat; si s'activa, el tancament de mes genera el fitxer per al banc.
+- **Neteja i sopar de socis**: preu de la neteja normal i ampliada, i si el sopar de socis es cobra en efectiu.
+- **Resums automàtics**: a qui s'envia el resum d'estoc (i quin dia de la setmana), el de tresoreria (cada 15 o 30 dies) i el de cada activitat (l'endemà, també a qui l'organitza). S'envien de matinada, amb la còpia de seguretat; cada resum té un botó «Enviar ara» per provar-lo.
 
 Recorda desactivar el **mode de proves** quan es comenci a fer servir de debò: mentre estigui activat, tots els correus van a l'adreça de proves.
 

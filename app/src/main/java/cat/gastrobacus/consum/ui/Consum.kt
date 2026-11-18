@@ -35,8 +35,11 @@ fun darrersMesos(n: Int = 12): List<String> = generateSequence(mesActual()) { me
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ElMeuConsum(estat: Estat, soci: Soci) {
+fun ElMeuConsum(model: AppModel, estat: Estat, soci: Soci) {
     var mes by remember { mutableStateOf(mesActual()) }
+    var pagant by remember { mutableStateOf(false) }
+    val compte = estat.compte(soci)
+    val meves = estat.transferencies.filter { it.sociId == soci.id }
     val inf = estat.informe(soci, mes)
     val estatMes = estat.estatMes(mes)
     val perCat = estat.consums.filter { it.sociId == soci.id && !it.anulat && mesDe(it.ts) == mes }
@@ -44,10 +47,46 @@ fun ElMeuConsum(estat: Estat, soci: Soci) {
         .mapValues { (_, l) -> l.sumOf { it.import } }.entries.sortedByDescending { it.value }
     val maxim = (perCat.maxOfOrNull { it.value } ?: 1L).coerceAtLeast(1L)
 
+    if (pagant) DialegPagar(model, estat, soci) { pagant = false }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Titol("El meu consum", Modifier.weight(1f))
+                Titol("El meu compte", Modifier.weight(1f))
+            }
+        }
+        if (!estat.config.rebutBancari || compte.perPagar > 0) item {
+            val antic = estat.deuteAntic(soci)
+            Bloc(Modifier.fillMaxWidth(), vora = if (antic) C.error else C.vora) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Suau(if (compte.perPagar > 0) "Pendent de pagar" else "Estàs al dia", mida = 18.sp)
+                        XifraText(euros(maxOf(0, compte.perPagar)), 48.sp, if (antic) C.error else C.roure)
+                        if (compte.perPagar > 0 && compte.deuteDesDe != null) Text(
+                            "Des del ${cat.gastrobacus.consum.dades.dataPlena(compte.deuteDesDe)}" + if (antic) ". Fa més de ${estat.config.diesAvisDeute} dies: paga-ho tan aviat com puguis." else ".",
+                            style = MaterialTheme.typography.bodyMedium, color = if (antic) C.error else C.roure2,
+                        )
+                        if (compte.pendentConfirmar > 0) Etiqueta("Transferència de ${euros(compte.pendentConfirmar)} pendent de comprovar", ToEtiqueta.AMBRE)
+                    }
+                    if (compte.perPagar > 0) Boto("Pagar", { pagant = true }, gran = true)
+                }
+                if (meves.isNotEmpty()) {
+                    Text("Els meus pagaments", style = MaterialTheme.typography.titleMedium)
+                    meves.take(5).forEach { t ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("${cat.gastrobacus.consum.dades.dataLlarga(t.data)}: ${euros(t.import)}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            when (t.estat) {
+                                cat.gastrobacus.consum.dades.EstatTransferencia.CONFIRMADA -> Etiqueta("Rebuda", ToEtiqueta.VERD)
+                                cat.gastrobacus.consum.dades.EstatTransferencia.PENDENT -> Etiqueta("Pendent de comprovar", ToEtiqueta.AMBRE)
+                                cat.gastrobacus.consum.dades.EstatTransferencia.REBUTJADA -> Etiqueta("No ha arribat", ToEtiqueta.VERMELL)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Subtitol("Consum del mes", Modifier.weight(1f))
                 SelectorMes(mes, darrersMesos(), { mes = it })
             }
         }
@@ -56,8 +95,8 @@ fun ElMeuConsum(estat: Estat, soci: Soci) {
                 Suau(
                     when (estatMes) {
                         EstatMes.OBERT -> "Portes gastat ${deMes(mes)}"
-                        EstatMes.INFORMAT -> "Pendent de passar al banc"
-                        EstatMes.TANCAT -> "Carregat al teu compte"
+                        EstatMes.INFORMAT -> "Consum ${deMes(mes)} (informe enviat)"
+                        EstatMes.TANCAT -> if (estat.config.rebutBancari) "Carregat al teu compte" else "Consum ${deMes(mes)} (mes tancat)"
                     }, mida = 18.sp,
                 )
                 XifraText(euros(inf.total), 56.sp, C.most)
@@ -102,3 +141,34 @@ fun ElMeuConsum(estat: Estat, soci: Soci) {
     }
 }
 
+/** El soci registra que ha fet la transferència del total que deu. */
+@Composable
+fun DialegPagar(model: AppModel, estat: Estat, soci: Soci, onTanca: () -> Unit) {
+    val compte = estat.compte(soci)
+    var data by remember { mutableStateOf(cat.gastrobacus.consum.dades.avui()) }
+    var concepte by remember { mutableStateOf("${estat.config.nomSocietat} ${soci.nomComplet}") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onTanca,
+        title = { Text("Pagar el que deus", style = MaterialTheme.typography.headlineMedium) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Import total pendent", style = MaterialTheme.typography.bodyLarge)
+                XifraText(euros(compte.perPagar), 44.sp, C.most)
+                if (estat.config.compteTransferencia.isNotBlank()) {
+                    Text("Fes la transferència al compte de la societat:", style = MaterialTheme.typography.bodyLarge)
+                    XifraText(estat.config.compteTransferencia, 24.sp)
+                }
+                CampData("Dia que has fet la transferència", data, { data = it })
+                Camp("Concepte que hi has posat", concepte, { concepte = it })
+                Suau("Tresoreria comprovarà que ha arribat. Mentrestant, surt com a pendent de comprovar.")
+            }
+        },
+        confirmButton = {
+            Boto("Registrar el pagament", {
+                model.accio("Pagament registrat: ${euros(compte.perPagar)}. Gràcies!", onTanca) { model.repo.registraTransferencia(soci.id, data, concepte) }
+            }, enabled = concepte.isNotBlank() && compte.perPagar > 0)
+        },
+        dismissButton = { Boto("Cancel·lar", onTanca, tipus = Tipus.FANTASMA) },
+        containerColor = C.superficie,
+    )
+}

@@ -130,16 +130,23 @@ interface Dao_ {
     @Query("DELETE FROM peticions") suspend fun buidaPeticions()
 
     @Query("SELECT * FROM reserves WHERE apatId = :apatId") suspend fun reservaDApat(apatId: String): Reserva?
+
+    // Transferències
+    @Query("SELECT * FROM transferencies ORDER BY ts DESC") fun transferencies(): Flow<List<Transferencia>>
+    @Query("SELECT * FROM transferencies") suspend fun totesTransferencies(): List<Transferencia>
+    @Query("SELECT * FROM transferencies WHERE id = :id") suspend fun transferencia(id: String): Transferencia?
+    @Upsert suspend fun desaTransferencia(t: Transferencia)
+    @Query("DELETE FROM transferencies") suspend fun buidaTransferencies()
 }
 
 @Database(
     entities = [
         Soci::class, Producte::class, Consum::class, Reposicio::class, Apat::class, Reserva::class, Tancament::class, Correu::class, ConfigFila::class,
-        ConvidatDia::class, Bizum::class, AvisEstoc::class, Peticio::class,
+        ConvidatDia::class, Bizum::class, AvisEstoc::class, Peticio::class, Transferencia::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 @TypeConverters(Conversors::class)
 abstract class BaseDades : RoomDatabase() {

@@ -38,6 +38,7 @@ import cat.gastrobacus.consum.dades.Estat
 import cat.gastrobacus.consum.dades.Extern
 import cat.gastrobacus.consum.dades.Franja
 import cat.gastrobacus.consum.dades.ModeRepartiment
+import cat.gastrobacus.consum.dades.Neteja
 import cat.gastrobacus.consum.dades.Soci
 import cat.gastrobacus.consum.dades.TOT_EL_LOCAL
 import cat.gastrobacus.consum.dades.TipusActivitat
@@ -107,6 +108,7 @@ private fun EditorApat(model: AppModel, estat: Estat, soci: Soci, inicial: Apat,
     var cadSoci by remember { mutableStateOf(textEuros(inicial.cadiraSoci)) }
     var cadNoSoci by remember { mutableStateOf(textEuros(inicial.cadiraNoSoci)) }
     var nomExtern by remember { mutableStateOf("") }
+    var responsable by remember { mutableStateOf(estat.soci(inicial.organitzadorId) ?: soci) }
     val existeix = estat.apats.any { it.id == a.id }
     val organitza = a.organitzadorId == soci.id || soci.esJunta || !existeix
     val potEditar = a.estat == EstatApat.OBERT && (organitza || a.assistents.any { it.sociId == soci.id })
@@ -118,7 +120,11 @@ private fun EditorApat(model: AppModel, estat: Estat, soci: Soci, inicial: Apat,
     val disponibles = estat.socisActius.filter { s -> a.assistents.none { it.sociId == s.id } }
     fun canviaTipus(t: TipusActivitat) {
         val pc = estat.config.preusCadira[t]
-        a = a.copy(tipus = t, cadiraSoci = pc?.soci ?: a.cadiraSoci, cadiraNoSoci = pc?.noSoci ?: a.cadiraNoSoci, externs = if (t == TipusActivitat.OBERT) a.externs else emptyList())
+        a = a.copy(
+            tipus = t, cadiraSoci = pc?.soci ?: a.cadiraSoci, cadiraNoSoci = pc?.noSoci ?: a.cadiraNoSoci,
+            externs = if (t == TipusActivitat.OBERT) a.externs else emptyList(),
+            cobramentEfectiu = t == TipusActivitat.SOCIS && estat.config.soparSocisEfectiu,
+        )
         cadSoci = textEuros(a.cadiraSoci); cadNoSoci = textEuros(a.cadiraNoSoci)
     }
     val pendentsExterns = a.externs.filter { !it.pagat }
@@ -158,6 +164,20 @@ private fun EditorApat(model: AppModel, estat: Estat, soci: Soci, inicial: Apat,
                     Suau("Preus per a aquesta activitat. Els preus per defecte es canvien a Gestió > Configuració.", Modifier.weight(1f).padding(bottom = 8.dp), 14.sp)
                 } else Text("Cadira: ${euros(a.cadiraSoci)} per soci i ${euros(a.cadiraNoSoci)} per convidat o persona de fora.", style = MaterialTheme.typography.bodyLarge)
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Desplegable(
+                    Neteja.entries, a.neteja,
+                    { n -> n.nom + (estat.config.preusNeteja[n]?.takeIf { it > 0 }?.let { " (${euros(it)})" } ?: "") },
+                    { n -> a = a.copy(neteja = n, preuNeteja = estat.config.preusNeteja[n] ?: 0) },
+                    Modifier.width(320.dp), "Neteja", organitza && potEditar,
+                )
+                Suau(if (a.preuNeteja > 0) "${euros(a.preuNeteja)} al compte de qui organitza." else "Sense cost.", Modifier.weight(1f).padding(top = 20.dp), 14.sp)
+            }
+            Casella(
+                "Es paga en efectiu a l'activitat (menjar i cadira)", a.cobramentEfectiu,
+                { a = a.copy(cobramentEfectiu = it) }, enabled = organitza && potEditar,
+            )
+            if (a.cobramentEfectiu) Suau("Cada assistent paga la seva part en mà. Els cuiners cobren el seu tiquet d'aquest efectiu i les cadires van a la caixa de la junta. No va al compte de ningú.", mida = 14.sp)
         }
 
         Bloc(Modifier.fillMaxWidth()) {
@@ -198,45 +218,40 @@ private fun EditorApat(model: AppModel, estat: Estat, soci: Soci, inicial: Apat,
 
         if (a.tipus == TipusActivitat.OBERT) {
             Subtitol("Persones de fora")
-            Suau("Paguen la seva part i la cadira a preu de no soci, per Bizum o en efectiu. No va al compte de cap soci.")
+            Suau("Cada persona de fora té un soci responsable: la seva part, la cadira (preu de no soci) i les begudes van al compte d'aquest soci. El dia de l'activitat surt a la pantalla d'inici com a convidat seu.")
             if (a.externs.isNotEmpty()) Taula {
-                FilaTaula(listOf({ Cap("Nom") }, { Cap(if (a.mode == ModeRepartiment.IGUALS) "" else "Parts") }, { Cap("Ha de pagar", true) }, { Cap("Estat") }, { Cap("") }), listOf(3f, 2f, 1.4f, 2.6f, 0.8f), capcalera = true)
+                val pesosE = listOf(3f, 2f, 3f, 1.4f, 0.8f)
+                FilaTaula(listOf({ Cap("Nom") }, { Cap(if (a.mode == ModeRepartiment.IGUALS) "" else "Parts") }, { Cap("A compte de") }, { Cap("Import", true) }, { Cap("") }), pesosE, capcalera = true)
                 a.externs.forEachIndexed { i, e ->
                     val q = r.quotes.firstOrNull { it.sociId == "ext:${e.id}" }
-                    val bizum = estat.bizums.firstOrNull { it.externId == e.id && it.estat == EstatBizum.PENDENT }
                     fun upd(n: Extern) { a = a.copy(externs = a.externs.toMutableList().also { l -> l[i] = n }) }
                     FilaTaula(
                         listOf(
                             { Cel(e.nom) },
                             { if (a.mode == ModeRepartiment.PROPORCIONAL) Pas(num(e.parts), organitza && potEditar, { upd(e.copy(parts = maxOf(0.0, e.parts - 0.5))) }, { upd(e.copy(parts = e.parts + 0.5)) }) },
-                            { Cel(euros(q?.quota ?: 0), dreta = true, negreta = true) },
                             {
-                                when {
-                                    e.pagat -> Etiqueta("Pagat", ToEtiqueta.VERD)
-                                    bizum != null -> Etiqueta("Bizum pendent de confirmar", ToEtiqueta.AMBRE)
-                                    existeix && potEditar -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        if (estat.config.telefonBizum.isNotBlank()) Boto("Bizum", {
-                                            model.accio("Bizum de ${e.nom}: ${euros(q?.quota ?: 0)} al ${estat.config.telefonBizum}") { model.repo.desaApat(a, soci.id); model.repo.bizumExtern(a, e, q?.quota ?: 0) }
-                                        }, tipus = Tipus.FANTASMA, petit = true)
-                                        if (soci.esJunta) Boto("Efectiu", { upd(e.copy(pagat = true)) }, tipus = Tipus.FANTASMA, petit = true)
-                                    }
-                                    else -> Etiqueta("Pendent", ToEtiqueta.AMBRE)
-                                }
+                                if (organitza && potEditar) Desplegable(estat.socisActius, estat.soci(e.responsableId) ?: soci, { it.nomComplet }, { s2 -> upd(e.copy(responsableId = s2.id)) }, Modifier.fillMaxWidth())
+                                else Cel(estat.soci(e.responsableId)?.nomComplet ?: "—")
                             },
-                            { if (organitza && potEditar && !e.pagat) BotoRodo(Icons.Default.Close, "Treu ${e.nom}") { a = a.copy(externs = a.externs.filterIndexed { j, _ -> j != i }) } },
+                            { Cel(euros(q?.quota ?: 0), dreta = true, negreta = true) },
+                            { if (organitza && potEditar) BotoRodo(Icons.Default.Close, "Treu ${e.nom}") { a = a.copy(externs = a.externs.filterIndexed { j, _ -> j != i }) } },
                         ),
-                        listOf(3f, 2f, 1.4f, 2.6f, 0.8f),
+                        pesosE,
                     )
                 }
             }
             if (organitza && potEditar) Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
-                Camp("Nom", nomExtern, { nomExtern = it }, Modifier.width(320.dp), placeholder = "Persona o família")
-                Boto("Afegir", { a = a.copy(externs = a.externs + Extern(nouId(), nomExtern.trim())); nomExtern = "" }, tipus = Tipus.SECUNDARI, enabled = nomExtern.isNotBlank(), icona = Icons.Default.Add)
+                Camp("Nom", nomExtern, { nomExtern = it }, Modifier.width(280.dp), placeholder = "Persona o família")
+                Desplegable(estat.socisActius, responsable, { it.nomComplet }, { responsable = it }, Modifier.width(280.dp), "A compte de")
+                Boto("Afegir", { a = a.copy(externs = a.externs + Extern(nouId(), nomExtern.trim(), responsableId = responsable.id)); nomExtern = "" }, tipus = Tipus.SECUNDARI, enabled = nomExtern.isNotBlank(), icona = Icons.Default.Add)
             }
         }
 
-        Subtitol("Despeses")
-        Suau("El que algú ha pagat de la seva butxaca per a l'activitat. Se li descomptarà del que li toca.")
+        Subtitol(if (a.cobramentEfectiu) "Tiquets dels cuiners" else "Despeses")
+        Suau(
+            if (a.cobramentEfectiu) "El que han gastat els cuiners en matèria primera, segons el tiquet. Es reparteix entre els assistents, que els ho paguen en efectiu."
+            else "El que algú ha pagat de la seva butxaca per a l'activitat. Se li descomptarà del que li toca.",
+        )
         a.despeses.forEachIndexed { i, d ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
                 Desplegable(estat.socisActius, estat.soci(d.pagadorId) ?: soci, { it.nomComplet }, { s ->
@@ -262,19 +277,48 @@ private fun EditorApat(model: AppModel, estat: Estat, soci: Soci, inicial: Apat,
                         ". Cadires ${euros(r.totalCadires)}",
                 )
             }
-            val pesos = listOf(3f, 1f, 1.2f, 1.2f, 2f)
-            FilaTaula(listOf({ Cap("Qui") }, { Cap(if (a.mode == ModeRepartiment.IGUALS) "Persones" else "Parts", true) }, { Cap("Menjar", true) }, { Cap("Cadires", true) }, { Cap("Resultat", true) }), pesos, capcalera = true)
+            val pesos = if (a.cobramentEfectiu) listOf(3f, 1f, 1.2f, 1.2f, 2f, 1.4f) else listOf(3f, 1f, 1.2f, 1.2f, 2f)
+            FilaTaula(
+                listOf<@Composable () -> Unit>({ Cap("Qui") }, { Cap(if (a.mode == ModeRepartiment.IGUALS) "Persones" else "Parts", true) }, { Cap("Menjar", true) }, { Cap("Cadires", true) }, { Cap(if (a.cobramentEfectiu) "En efectiu" else "Resultat", true) }) +
+                    if (a.cobramentEfectiu) listOf<@Composable () -> Unit>({ Cap("Pagat") }) else emptyList(),
+                pesos, capcalera = true,
+            )
             r.quotes.forEach { q ->
+                val assistent = a.assistents.indexOfFirst { it.sociId == q.sociId }
+                val resultat = if (a.cobramentEfectiu) {
+                    val e = q.efectiu
+                    if (e < 0) "rep ${euros(-e)}" else "paga ${euros(e)}"
+                } else if (q.saldo < 0) "se li torna ${euros(-q.saldo)}" else "paga ${euros(q.saldo)}"
+                val negatiu = if (a.cobramentEfectiu) q.efectiu < 0 else q.saldo < 0
                 FilaTaula(
-                    listOf(
-                        { Column { Cel(q.nomExtern ?: nom(q.sociId)); if (q.pagat > 0) Suau("Ha pagat ${euros(q.pagat)}", mida = 13.sp); if (q.esExtern) Suau("De fora", mida = 13.sp) } },
+                    listOf<@Composable () -> Unit>(
+                        {
+                            Column {
+                                Cel(q.nomExtern ?: nom(q.sociId))
+                                if (q.pagat > 0) Suau((if (a.cobramentEfectiu) "Tiquet " else "Ha pagat ") + euros(q.pagat), mida = 13.sp)
+                                if (q.esExtern) Suau("De fora, a compte de ${estat.soci(q.responsableId)?.nom ?: "—"}", mida = 13.sp)
+                                if (q.neteja > 0) Suau("Neteja ${euros(q.neteja)} al compte", mida = 13.sp)
+                            }
+                        },
                         { Cel(num(q.unitats), dreta = true) },
                         { Cel(euros(q.menjar), dreta = true) },
                         { Cel(if (q.cadires > 0) euros(q.cadires) else "", dreta = true) },
-                        { Cel(if (q.saldo < 0) "se li torna ${euros(-q.saldo)}" else "paga ${euros(q.saldo)}", dreta = true, negreta = true, color = if (q.saldo < 0) C.pampol else C.most) },
-                    ),
+                        { Cel(resultat, dreta = true, negreta = true, color = if (negatiu) C.pampol else C.most) },
+                    ) + if (a.cobramentEfectiu) listOf<@Composable () -> Unit>({
+                        if (assistent >= 0 && q.efectiu > 0) Casella("", a.assistents[assistent].pagatEfectiu, { v ->
+                            a = a.copy(assistents = a.assistents.toMutableList().also { l -> l[assistent] = l[assistent].copy(pagatEfectiu = v) })
+                        }, enabled = potEditar)
+                    }) else emptyList(),
                     pesos,
                 )
+            }
+            if (a.cobramentEfectiu) {
+                val aCobrar = r.quotes.filter { !it.esExtern }.sumOf { maxOf(0, it.efectiu) } + r.quotes.filter { it.esExtern }.sumOf { it.efectiu }
+                val cobrat = r.quotes.filter { q -> a.assistents.any { it.sociId == q.sociId && it.pagatEfectiu } }.sumOf { maxOf(0, it.efectiu) }
+                val cuiners = r.quotes.filter { it.efectiu < 0 }
+                Text("Efectiu: s'han de cobrar ${euros(aCobrar)}; marcat com a pagat ${euros(cobrat)}.", style = MaterialTheme.typography.titleMedium)
+                if (cuiners.isNotEmpty()) Suau("Als cuiners: " + cuiners.joinToString { "${nom(it.sociId)} ${euros(-it.efectiu)}" } + ". Per a la caixa de la junta (cadires): ${euros(r.totalCadires)}.", mida = 14.sp)
+                if (r.quotes.any { it.esExtern }) Suau("La part de la gent de fora la paga en efectiu el seu soci responsable.", mida = 14.sp)
             }
         }
 

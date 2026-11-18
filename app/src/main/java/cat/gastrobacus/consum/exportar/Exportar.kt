@@ -126,20 +126,20 @@ fun pdfJunta(context: Context, estat: Estat, mes: String): Fitxer {
 
 /* ======================= Excel (XLSX mínim) ======================= */
 
-private sealed class Cel {
+internal sealed class Cel {
     data class T(val v: String, val negreta: Boolean = false) : Cel()
     data class E(val cents: Long, val negreta: Boolean = false) : Cel() // import en euros
     data class N(val v: Number) : Cel()
     data class D(val ts: Long) : Cel()
 }
 
-private class Full(val nom: String, val amples: List<Int>, val files: List<List<Cel>>)
+internal class Full(val nom: String, val amples: List<Int>, val files: List<List<Cel>>)
 
 private fun esc(t: String) = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
 private fun col(i: Int): String { var n = i; var s = ""; do { s = ('A' + n % 26) + s; n = n / 26 - 1 } while (n >= 0); return s }
 
-private fun xlsx(fulls: List<Full>): ByteArray {
+internal fun xlsx(fulls: List<Full>): ByteArray {
     val out = ByteArrayOutputStream()
     ZipOutputStream(out).use { z ->
         fun put(nom: String, cont: String) { z.putNextEntry(ZipEntry(nom)); z.write(cont.toByteArray()); z.closeEntry() }

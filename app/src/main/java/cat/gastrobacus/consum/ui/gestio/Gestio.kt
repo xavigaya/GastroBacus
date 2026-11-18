@@ -44,7 +44,7 @@ import cat.gastrobacus.consum.ui.Titol
 import cat.gastrobacus.consum.ui.XifraText
 
 enum class SeccioGestio(val titol: String) {
-    RESUM("Resum"), CONSUMICIONS("Consumicions"), PRODUCTES("Productes"), ESTOC("Estoc"), COMANDES("Comandes"), BIZUMS("Bizums"),
+    RESUM("Resum"), CONSUMICIONS("Consumicions"), PRODUCTES("Productes"), ESTOC("Estoc"), COMANDES("Comandes"), COBRAMENTS("Cobraments"),
     SOCIS("Socis"), TANCAMENT("Tancament de mes"), CORREUS("Correus"), COPIES("Còpies"), CONFIGURACIO("Configuració"),
 }
 
@@ -61,7 +61,7 @@ fun Gestio(model: AppModel, estat: Estat, soci: Soci) {
                 val n = when (x) {
                     SeccioGestio.ESTOC -> maxOf(perReposar, estat.avisosNous.size)
                     SeccioGestio.COMANDES -> estat.peticionsPendents.size
-                    SeccioGestio.BIZUMS -> estat.bizumsPendents.size
+                    SeccioGestio.COBRAMENTS -> estat.bizumsPendents.size + estat.transferenciesPendents.size
                     SeccioGestio.CORREUS -> pendents
                     else -> 0
                 }
@@ -75,7 +75,7 @@ fun Gestio(model: AppModel, estat: Estat, soci: Soci) {
                 SeccioGestio.PRODUCTES -> GestioProductes(model, estat)
                 SeccioGestio.ESTOC -> GestioEstoc(model, estat, soci)
                 SeccioGestio.COMANDES -> GestioComandes(model, estat)
-                SeccioGestio.BIZUMS -> GestioBizums(model, estat, soci)
+                SeccioGestio.COBRAMENTS -> GestioCobraments(model, estat, soci)
                 SeccioGestio.SOCIS -> GestioSocis(model, estat)
                 SeccioGestio.TANCAMENT -> Tancament(model, estat)
                 SeccioGestio.CORREUS -> Correus(model, estat)
@@ -113,7 +113,10 @@ private fun Resum(estat: Estat, onVes: (SeccioGestio) -> Unit) {
         ) { Boto("Comandes", { onVes(SeccioGestio.COMANDES) }, tipus = Tipus.FANTASMA, petit = true) }
         if (estat.bizumsPendents.isNotEmpty()) Avis(
             "${estat.bizumsPendents.size} Bizums pendents de confirmar (${euros(estat.bizumsPendents.sumOf { it.import })}).",
-        ) { Boto("Confirmar", { onVes(SeccioGestio.BIZUMS) }, tipus = Tipus.FANTASMA, petit = true) }
+        ) { Boto("Confirmar", { onVes(SeccioGestio.COBRAMENTS) }, tipus = Tipus.FANTASMA, petit = true) }
+        if (estat.transferenciesPendents.isNotEmpty()) Avis(
+            "${estat.transferenciesPendents.size} transferències pendents de comprovar (${euros(estat.transferenciesPendents.sumOf { it.import })}).",
+        ) { Boto("Comprovar", { onVes(SeccioGestio.COBRAMENTS) }, tipus = Tipus.FANTASMA, petit = true) }
         if (pendentsTancar.isNotEmpty()) Avis(
             pendentsTancar.joinToString { nomMes(it) } + if (pendentsTancar.size > 1) " encara no estan tancats." else " encara no està tancat.",
         ) { Boto("Anar al tancament", { onVes(SeccioGestio.TANCAMENT) }, tipus = Tipus.FANTASMA, petit = true) }

@@ -164,10 +164,10 @@ fun GestioBizums(model: AppModel, estat: Estat, junta: Soci) {
     val pendents = estat.bizumsPendents
     val altres = estat.bizums.filter { it.estat != EstatBizum.PENDENT }.take(40)
     val pesos = listOf(1.5f, 2.6f, 2.6f, 1.1f, 2.6f)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (estat.config.telefonBizum.isBlank()) Avis("Encara no hi ha cap telèfon de Bizum a Configuració: els socis no veuran l'opció de pagar per Bizum.")
-        Suau("Comprova al compte de la societat que han arribat. Si un Bizum no arriba, les consumicions passen a la factura del mes del soci.")
-        Subtitol("Pendents de confirmar")
+        Subtitol("Bizums per comprovar")
+        Suau("Si un Bizum no arriba, les consumicions passen al compte del soci.")
         if (pendents.isEmpty()) Suau("Cap Bizum pendent.")
         else Taula {
             FilaTaula(listOf({ Cap("Quan") }, { Cap("Qui") }, { Cap("Concepte") }, { Cap("Import", true) }, { Cap("") }), pesos, capcalera = true)
@@ -191,7 +191,7 @@ fun GestioBizums(model: AppModel, estat: Estat, junta: Soci) {
             FilaTaula(listOf({ Cel("Total", negreta = true) }, {}, {}, { Cel(euros(pendents.sumOf { it.import }), dreta = true, negreta = true) }, {}), pesos, capcalera = true)
         }
         if (altres.isNotEmpty()) {
-            Subtitol("Darrers confirmats")
+            Subtitol("Darrers Bizums comprovats")
             Taula {
                 altres.forEach { b ->
                     FilaTaula(

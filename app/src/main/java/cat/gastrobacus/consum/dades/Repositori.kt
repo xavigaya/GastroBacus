@@ -27,6 +27,7 @@ data class Estat(
     val bizums: List<Bizum> = emptyList(),
     val avisos: List<AvisEstoc> = emptyList(),
     val peticions: List<Peticio> = emptyList(),
+    val transferencies: List<Transferencia> = emptyList(),
 ) {
     fun soci(id: String?) = socis.firstOrNull { it.id == id }
     fun producte(id: String?) = productes.firstOrNull { it.id == id }
@@ -42,13 +43,19 @@ data class Estat(
     val avisosNous get() = avisos.filter { !it.llegit }
     val peticionsPendents get() = peticions.filter { it.estat == EstatPeticio.PENDENT }
     fun favoritsDe(sociId: String?) = favorits(productes, consums, sociId, config.favoritsPerSoci)
+    /** Mesos ja cobrats amb el rebut bancari (només si es fa servir el rebut). */
+    val mesosPagatsPerRebut get() = if (config.rebutBancari) tancaments.filter { it.estat == EstatMes.TANCAT }.map { it.mes }.toSet() else emptySet()
+    fun compte(soci: Soci) = estatCompte(soci, consums, apats, transferencies, mesosPagatsPerRebut)
+    /** Té deute de fa més dels dies configurats (el nom canvia de color a «Qui ets?»). */
+    fun deuteAntic(soci: Soci, ara: Long = System.currentTimeMillis()) = compte(soci).let { it.perPagar > 0 && it.diesDeute(ara) > config.diesAvisDeute }
+    val transferenciesPendents get() = transferencies.filter { it.estat == EstatTransferencia.PENDENT }
 }
 
 data class ItemApunt(val producteId: String, val quantitat: Int, val convidat: String? = null)
 
 @Serializable
 data class Copia(
-    val versio: Int = 2,
+    val versio: Int = 3,
     val ts: Long,
     val config: Config,
     val socis: List<Soci>,
@@ -63,6 +70,7 @@ data class Copia(
     val bizums: List<Bizum> = emptyList(),
     val avisos: List<AvisEstoc> = emptyList(),
     val peticions: List<Peticio> = emptyList(),
+    val transferencies: List<Transferencia> = emptyList(),
 )
 
 data class ResultatImportacio(val nous: Int, val actualitzats: Int, val errors: List<String>)
@@ -73,7 +81,7 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
     val estat: StateFlow<Estat> = combine(
         combine(dao.socis(), dao.productes(), dao.consums(), dao.reposicions()) { s, p, c, r -> listOf(s, p, c, r) },
         combine(dao.apats(), dao.reserves(), dao.tancaments(), dao.correus(), dao.config()) { a, re, t, co, cf -> listOf(a, re, t, co, cf) },
-        combine(dao.convidats(), dao.bizums(), dao.avisos(), dao.peticions()) { cv, b, av, pe -> listOf(cv, b, av, pe) },
+        combine(dao.convidats(), dao.bizums(), dao.avisos(), dao.peticions(), dao.transferencies()) { cv, b, av, pe, tr -> listOf(cv, b, av, pe, tr) },
     ) { x, y, z ->
         @Suppress("UNCHECKED_CAST")
         Estat(
@@ -91,6 +99,7 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
             bizums = z[1] as List<Bizum>,
             avisos = z[2] as List<AvisEstoc>,
             peticions = z[3] as List<Peticio>,
+            transferencies = z[4] as List<Transferencia>,
         )
     }.stateIn(ambit, SharingStarted.Eagerly, Estat())
 
@@ -251,6 +260,49 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
         dao.bizum(id)?.let { dao.desaBizum(it.copy(estat = EstatBizum.PENDENT, confirmatPer = null, confirmatTs = null)) }
     }
 
+    // ---------- Pagaments per transferència ----------
+
+    suspend fun compteDe(sociId: String): EstatCompte {
+        val s = dao.soci(sociId) ?: throw ErrorApp("No es troba el soci.")
+        val cfg = config()
+        val pagatsRebut = if (cfg.rebutBancari) dao.totsTancaments().filter { it.estat == EstatMes.TANCAT }.map { it.mes }.toSet() else emptySet()
+        return estatCompte(s, dao.totsConsums(), dao.totsApats(), dao.totesTransferencies(), pagatsRebut)
+    }
+
+    /** El soci declara que ha fet la transferència del total que deu. */
+    suspend fun registraTransferencia(sociId: String, data: String, concepte: String): Transferencia {
+        if (data > avui()) throw ErrorApp("La data de la transferència no pot ser posterior a avui.")
+        if (concepte.isBlank()) throw ErrorApp("Escriu el concepte que has posat a la transferència.")
+        val import = compteDe(sociId).perPagar
+        if (import <= 0) throw ErrorApp("No tens res pendent de pagar.")
+        val t = Transferencia(nouId(), sociId, import, data, concepte.trim(), System.currentTimeMillis())
+        dao.desaTransferencia(t)
+        return t
+    }
+
+    suspend fun confirmaTransferencia(id: String, perId: String, rebuda: Boolean) {
+        val t = dao.transferencia(id) ?: return
+        dao.desaTransferencia(t.copy(estat = if (rebuda) EstatTransferencia.CONFIRMADA else EstatTransferencia.REBUTJADA, confirmatPer = perId, confirmatTs = System.currentTimeMillis()))
+    }
+
+    suspend fun reobreTransferencia(id: String) {
+        dao.transferencia(id)?.let { dao.desaTransferencia(it.copy(estat = EstatTransferencia.PENDENT, confirmatPer = null, confirmatTs = null)) }
+    }
+
+    /** El dia d'una activitat, la gent de fora surt a «Qui ets?» com a convidats del seu soci responsable. */
+    suspend fun activaConvidatsActivitats() {
+        val avui = avui()
+        val ara = System.currentTimeMillis()
+        val existents = dao.totsConvidats().map { it.id }.toSet()
+        val hora = config().horaFiDia
+        dao.totsApats().filter { it.data == avui && it.estat == EstatApat.OBERT }.forEach { a ->
+            a.externs.filter { it.responsableId.isNotBlank() }.forEach { e ->
+                val id = "ext-${e.id}-$avui"
+                if (id !in existents) dao.desaConvidat(ConvidatDia(id, e.nom, e.responsableId, ara, caducaConvidat(ara, hora)))
+            }
+        }
+    }
+
     // ---------- Catàleg, socis i estoc ----------
 
     suspend fun desaProducte(p: Producte) {
@@ -389,11 +441,11 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
                 comprovaConflicte(a.data, a.franja, a.espai, a.espai == TOT_EL_LOCAL, excloent = anterior?.id)
                 val r = Reserva(
                     anterior?.id ?: nouId(), a.organitzadorId, a.data, a.franja, a.espai, maxOf(1, persones),
-                    "Activitat ${a.tipus.nom.lowercase()}: ${a.titol.trim()}", anterior?.creada ?: System.currentTimeMillis(),
+                    "Activitat ${a.tipus.nom.lowercase()}: ${a.titol.trim()}" + (if (a.neteja != Neteja.SENSE) ". ${a.neteja.nom}" else ""), anterior?.creada ?: System.currentTimeMillis(),
                     exclusiu = a.espai == TOT_EL_LOCAL, apatId = a.id,
                 )
                 dao.desaReserva(r)
-                val canvi = anterior == null || anterior.data != r.data || anterior.franja != r.franja || anterior.espai != r.espai
+                val canvi = anterior == null || anterior.data != r.data || anterior.franja != r.franja || anterior.espai != r.espai || anterior.notes != r.notes
                 if (canvi) avisaReserva(r, if (anterior == null) "nova reserva" else "reserva modificada", perId)
             }
         }
@@ -412,6 +464,10 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
     suspend fun bizumExtern(apat: Apat, extern: Extern, import: Long) {
         dao.totsBizums().firstOrNull { it.externId == extern.id && it.estat == EstatBizum.PENDENT }?.let { return }
         dao.desaBizum(Bizum(nouId(), null, extern.nom, "Activitat: ${apat.titol}", import, System.currentTimeMillis(), apatId = apat.id, externId = extern.id))
+    }
+
+    suspend fun marcaResumEnviat(apatId: String) {
+        dao.apat(apatId)?.let { dao.desaApat(it.copy(resumEnviat = true)) }
     }
 
     // ---------- Reserves ----------
@@ -468,7 +524,8 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
     /** Pas 2: crea un correu per a cada soci i un per a tresoreria, i obre el termini de reclamacions. */
     suspend fun prepararInformes(mes: String): List<Correu> {
         val cfg = config()
-        val informes = informeMes(dao.totsSocis(), mes, dao.totsConsums(), dao.totsApats())
+        val consums = dao.totsConsums(); val apats = dao.totsApats(); val transferencies = dao.totesTransferencies()
+        val informes = informeMes(dao.totsSocis(), mes, consums, apats)
         if (informes.isEmpty()) throw ErrorApp("Aquest mes no hi ha cap consum.")
         val ara = System.currentTimeMillis()
         val limit = dataPlena(ara + cfg.diesReclamacio * 86_400_000L)
@@ -488,7 +545,16 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
                 if (inf.total >= 0) append("\nTotal a carregar al teu compte: ${euros(inf.total)}\n\n")
                 else append("\nSaldo a favor teu: ${euros(-inf.total)}. La junta te'l tornarà.\n\n")
                 append("El que vas pagar per Bizum no hi surt.\n")
-                append("Si hi veus algun error, digues-ho a la junta abans del $limit. Després es passarà el rebut al banc.\n\n")
+                if (cfg.rebutBancari) append("Si hi veus algun error, digues-ho a la junta abans del $limit. Després es passarà el rebut al banc.\n\n")
+                else {
+                    val compte = estatCompte(inf.soci, consums, apats, transferencies)
+                    if (compte.perPagar > 0) {
+                        append("\nTens pendent de pagar ${euros(compte.perPagar)} en total.")
+                        if (cfg.compteTransferencia.isNotBlank()) append(" Fes una transferència al compte ${cfg.compteTransferencia}")
+                        append(" i, després, prem «Pagar» al teu compte de la tauleta per registrar-la.\n")
+                    } else append("\nNo tens res pendent de pagar. Gràcies!\n")
+                    append("Si hi veus algun error, digues-ho a la junta abans del $limit.\n\n")
+                }
                 append("Junta de ${cfg.nomSocietat}")
             }
             correus += Correu(nouId(), ara, desti(inf.soci.email), inf.soci.email, "${cfg.nomSocietat}: el teu consum ${deMes(mes)}", cos, inf.soci.id, mes)
@@ -603,6 +669,7 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
         bizums = dao.totsBizums(),
         avisos = dao.totsAvisos(),
         peticions = dao.totesPeticions(),
+        transferencies = dao.totesTransferencies(),
     )
 
     suspend fun restaura(c: Copia, mantenirCompteGoogle: Boolean = true) {
@@ -621,6 +688,7 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
             c.bizums.forEach { dao.desaBizum(it) }
             c.avisos.forEach { dao.desaAvis(it) }
             c.peticions.forEach { dao.desaPeticio(it) }
+            c.transferencies.forEach { dao.desaTransferencia(it) }
             val cfg = if (mantenirCompteGoogle && compte != null) c.config.copy(compteGoogle = compte) else c.config
             desaConfig(cfg)
         }
@@ -629,7 +697,7 @@ class Repositori(private val bd: BaseDades, ambit: CoroutineScope) {
     private suspend fun esborraTotIntern() {
         dao.buidaSocis(); dao.buidaProductes(); dao.buidaConsums(); dao.buidaReposicions()
         dao.buidaApats(); dao.buidaReserves(); dao.buidaTancaments(); dao.buidaCorreus(); dao.buidaConfig()
-        dao.buidaConvidats(); dao.buidaBizums(); dao.buidaAvisos(); dao.buidaPeticions()
+        dao.buidaConvidats(); dao.buidaBizums(); dao.buidaAvisos(); dao.buidaPeticions(); dao.buidaTransferencies()
     }
 
     suspend fun carregaDadesProva() {

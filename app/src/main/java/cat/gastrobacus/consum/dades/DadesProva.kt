@@ -97,6 +97,12 @@ object DadesProva {
             dia = dia.plusDays(1)
         }
 
+        // Tres socis amb un consum de fa 50 dies que encara no han pagat (surten en vermell a «Qui ets?»)
+        listOf("s5", "s9", "s14").forEach { id ->
+            val p = productes[0]
+            consums += Consum(nouId(), id, p.id, p.nom, 2, p.preu, null, ara - 50 * 86_400_000L, Origen.TAULETA)
+        }
+
         // Uns quants pagaments per Bizum dels darrers dies (dos confirmats i un pendent)
         val bizums = mutableListOf<Bizum>()
         consums.filter { it.ts > ara - 4 * 86_400_000L && it.convidat == null }.take(3).forEachIndexed { i, c ->
@@ -137,6 +143,7 @@ object DadesProva {
                 ),
                 EstatApat.TANCAT,
                 tipus = TipusActivitat.SOCIS, franja = Franja.DINAR, espai = TOT_EL_LOCAL, cadiraSoci = 200, cadiraNoSoci = 300,
+                cobramentEfectiu = true, neteja = Neteja.NORMAL, preuNeteja = 2000, resumEnviat = true,
             ),
             Apat(
                 nouId(), "Sopar de caragols", mes.atDay(maxOf(1, minOf(avui.dayOfMonth - 1, 17))).toString(), "s3", ModeRepartiment.PROPORCIONAL,
@@ -149,7 +156,8 @@ object DadesProva {
                 listOf(Assistent("s7"), Assistent("s1", 1), Assistent("s11"), Assistent("s16", 2), Assistent("s20")),
                 listOf(DespesaApat(nouId(), "s7", "Arròs, marisc i verdura", 9800)),
                 tipus = TipusActivitat.OBERT, franja = Franja.TOT_EL_DIA, espai = TOT_EL_LOCAL, cadiraSoci = 300, cadiraNoSoci = 500,
-                externs = listOf(Extern("e1", "Família Roca (veïns)"), Extern("e2", "Sílvia Mas")),
+                externs = listOf(Extern("e1", "Família Roca (veïns)", responsableId = "s7"), Extern("e2", "Sílvia Mas", responsableId = "s16")),
+                neteja = Neteja.AMPLIADA, preuNeteja = 4000,
             ),
         )
 
@@ -158,6 +166,10 @@ object DadesProva {
             correuReserves = "reserves@exemple.cat",
             correuAvisos = "magatzem@exemple.cat",
             correuProveidor = "comandes@distribucions-exemple.cat",
+            compteTransferencia = "ES00 1234 5678 9012 3456 7890",
+            resumEstocPer = "magatzem@exemple.cat",
+            resumTresoreriaPer = "tresoreria@exemple.cat",
+            resumActivitatsPer = "tresoreria@exemple.cat",
         )
         val reserves = listOf(
             Reserva(nouId(), "s4", avui.plusDays(2).toString(), Franja.SOPAR, cfg.espais[0], 12, "Aniversari", ara - 3 * 86_400_000L),
@@ -166,11 +178,23 @@ object DadesProva {
         )
         val tancaments = listOf(Tancament(mesPassat.minusMonths(1).toString(), EstatMes.TANCAT, ara - 50 * 86_400_000L, ara - 44 * 86_400_000L))
 
+        // Pagaments per transferència: quasi tothom ha pagat el mes passat; uns quants no (deute antic) i un està pendent
+        val transferencies = socis.filter { it.id !in setOf("s5", "s9", "s14") }.mapNotNull { soci ->
+            val deute = liniesSoci(soci, consums, apats).filter { mesDe(it.ts) < mes.toString() }.sumOf { it.import }
+            if (deute <= 0) return@mapNotNull null
+            val pendent = soci.id == "s12"
+            Transferencia(
+                nouId(), soci.id, deute, mes.atDay(minOf(5, avui.dayOfMonth)).toString(), "GastroBacus ${soci.nomComplet}",
+                ara - (if (pendent) 1 else 10) * 3_600_000L,
+                if (pendent) EstatTransferencia.PENDENT else EstatTransferencia.CONFIRMADA, if (pendent) null else "s1",
+            )
+        }
+
         return Copia(
             ts = ara, config = cfg, socis = socis, productes = productes, consums = consums,
             reposicions = emptyList(), apats = apats, reserves = reserves, tancaments = tancaments, correus = emptyList(),
             convidats = listOf(ConvidatDia("c1", "Marc", "s5", ara - 1_800_000L, caducaConvidat(ara, cfg.horaFiDia))),
-            bizums = bizums, avisos = avisos,
+            bizums = bizums, avisos = avisos, transferencies = transferencies,
             peticions = listOf(
                 Peticio(nouId(), "s9", TipusPeticio.FALTA, "p15", "Fanta de llimona", ara - 5_400_000L),
                 Peticio(nouId(), "s12", TipusPeticio.PROPOSTA, null, "Vermut negre de Reus", ara - 2 * 86_400_000L),
